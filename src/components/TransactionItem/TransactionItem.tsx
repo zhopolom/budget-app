@@ -9,7 +9,8 @@ import styles from './TransactionItem.module.css'
 interface TransactionItemProps {
   view: TransactionView
   currency: CurrencyCode
-  dayLabel: string
+  /** Подпись под суммой. Пусто — когда дата уже есть в заголовке группы. */
+  dayLabel?: string
   /** Если задан — строка становится кнопкой. */
   onSelect?: (id: Id) => void
 }
@@ -38,7 +39,7 @@ export const TransactionItem = memo(function TransactionItem({ view, currency, d
         <span className={styles.amount} data-type={transaction.type}>
           {amount}
         </span>
-        <span className={styles.date}>{dayLabel}</span>
+        {dayLabel && <span className={styles.date}>{dayLabel}</span>}
       </div>
     </>
   )
