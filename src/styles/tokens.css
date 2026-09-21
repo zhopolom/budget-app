@@ -23,7 +23,6 @@
   --warning: #c27a00;
   --negative: #d93d4a;
 
-  --nav-bg: rgba(255, 255, 255, 0.82);
   --segment-active: #ffffff;
 
   --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -64,7 +63,6 @@
     --warning: #f5b547;
     --negative: #ff6b72;
 
-    --nav-bg: rgba(28, 25, 38, 0.82);
     --segment-active: #3d3654;
   }
 }
@@ -89,6 +87,5 @@
   --warning: #f5b547;
   --negative: #ff6b72;
 
-  --nav-bg: rgba(28, 25, 38, 0.82);
   --segment-active: #3d3654;
 }

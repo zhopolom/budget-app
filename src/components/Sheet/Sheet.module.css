@@ -23,6 +23,11 @@
   border-radius: 50%;
   background: var(--surface-2);
   color: var(--ink-2);
+  transition: transform 0.12s var(--ease-out);
+}
+
+.close:active {
+  transform: scale(0.94);
 }
 
 /* Невидимая зона касания 44×44 вокруг кнопки 36×36 */

@@ -21,10 +21,20 @@
   background: var(--surface);
 }
 
+/*
+ * Шторки и диалоги — самый верхний слой, поэтому материал плотный: под ними
+ * должен угадываться экран, но поля ввода внутри обязаны читаться без усилий.
+ */
+.panel.glass {
+  background: var(--glass-bg);
+}
+
 .sheet .panel {
   right: 0;
   bottom: 0;
   left: 0;
+  /* Тень вверх: у панели, прижатой к нижнему краю, обычная уходит за экран */
+  --glass-shadow: 0 -14px 40px -20px rgba(28, 24, 41, 0.45);
   max-width: var(--content-max);
   max-height: calc(100dvh - env(safe-area-inset-top) - 24px - var(--keyboard-inset, 0px));
   margin: 0 auto;

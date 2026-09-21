@@ -21,7 +21,7 @@ export function MonthSelector({ selection, title }: MonthSelectorProps) {
     <div className={styles.bar} data-standalone={title ? undefined : ''}>
       {title && <h1 className={styles.title}>{title}</h1>}
 
-      <div className={styles.switcher} role="group" aria-label="Выбор месяца">
+      <div className={`${styles.switcher} glass`} data-glass="subtle" data-glass-border role="group" aria-label="Выбор месяца">
         <button
           type="button"
           className={styles.arrow}

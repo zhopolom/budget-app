@@ -33,7 +33,7 @@ function Item({ to, label, icon, alsoActiveOn }: NavItem) {
 
 export function BottomNavigation() {
   return (
-    <nav className={styles.nav} aria-label="Основная навигация">
+    <nav className={`${styles.nav} glass`} data-glass="regular" aria-label="Основная навигация">
       <ul className={styles.list}>
         {LEFT.map((item) => (
           <Item key={item.to} {...item} />

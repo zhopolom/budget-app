@@ -47,7 +47,11 @@ export function Dialog({ open, onClose, variant, labelledBy, role = 'dialog', ch
         if (event.target === event.currentTarget) onClose()
       }}
     >
-      {open && <div className={styles.panel}>{children}</div>}
+      {open && (
+        <div className={`${styles.panel} glass`} data-glass="prominent">
+          {children}
+        </div>
+      )}
     </dialog>
   )
 }
