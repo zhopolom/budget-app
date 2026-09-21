@@ -1,3 +1,4 @@
+import { keepFocus } from '../../utils/keepFocus'
 import styles from './ChipGroup.module.css'
 
 export interface Chip<T extends string> {
@@ -26,6 +27,7 @@ export function ChipGroup<T extends string>({ chips, value, onChange, label, lay
           role="radio"
           aria-checked={chip.value === value}
           className={styles.chip}
+          onMouseDown={keepFocus}
           onClick={() => onChange(chip.value)}
         >
           {chip.icon && (

@@ -103,6 +103,17 @@ function sanitizeInput(raw: string): string {
   return fraction === null ? integer : `${integer},${fraction}`
 }
 
+/**
+ * Компактно, без копеек и символа валюты — для ячеек календаря,
+ * где на сумму приходится около сорока пикселей.
+ * 43000 → «430», 250000 → «2 500», 3200000 → «32к».
+ */
+function formatCompact(amount: MinorUnits): string {
+  const major = Math.round(Math.abs(assertSafe(amount)) / MINOR_PER_MAJOR)
+  if (major < 10_000) return groupThousands(String(major))
+  return `${groupThousands(String(Math.round(major / 1000)))}к`
+}
+
 /** Для ввода/редактирования: 12550 → «125,50», 12500 → «125». */
 function toInputString(amount: MinorUnits): string {
   const abs = Math.abs(assertSafe(amount))
@@ -149,6 +160,7 @@ export const Money = {
   parse,
   sanitizeInput,
   format,
+  formatCompact,
   toInputString,
   fromMajor,
   add,

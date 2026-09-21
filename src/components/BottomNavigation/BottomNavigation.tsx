@@ -12,12 +12,12 @@ interface NavItem {
 
 const LEFT: readonly NavItem[] = [
   { to: '/', label: 'Главная', icon: 'home' },
-  { to: '/transactions', label: 'Операции', icon: 'list' },
+  { to: '/transactions', label: 'Операции', icon: 'list', alsoActiveOn: ['/calendar'] },
 ]
 
 const RIGHT: readonly NavItem[] = [
   { to: '/analytics', label: 'Статистика', icon: 'chart' },
-  { to: '/settings', label: 'Настройки', icon: 'settings', alsoActiveOn: ['/accounts', '/categories'] },
+  { to: '/settings', label: 'Настройки', icon: 'settings', alsoActiveOn: ['/accounts', '/account', '/categories', '/budgets', '/recurring'] },
 ]
 
 function Item({ to, label, icon, alsoActiveOn }: NavItem) {
@@ -33,7 +33,7 @@ function Item({ to, label, icon, alsoActiveOn }: NavItem) {
 
 export function BottomNavigation() {
   return (
-    <nav className={styles.nav} aria-label="Основная навигация">
+    <nav className={`${styles.nav} glass`} data-glass="regular" aria-label="Основная навигация">
       <ul className={styles.list}>
         {LEFT.map((item) => (
           <Item key={item.to} {...item} />

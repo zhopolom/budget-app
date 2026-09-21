@@ -35,7 +35,9 @@
     color 0.15s;
 }
 
-.chip[aria-checked='true'] {
+/* aria-checked — у одиночного выбора, aria-pressed — у множественного */
+.chip[aria-checked='true'],
+.chip[aria-pressed='true'] {
   background: var(--accent);
   color: var(--accent-ink);
 }

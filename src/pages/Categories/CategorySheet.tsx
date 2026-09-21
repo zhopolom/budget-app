@@ -1,7 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Button } from '../../components/Button/Button'
-import { useConfirm } from '../../components/Confirm/confirmContext'
-import { Sheet } from '../../components/Sheet/Sheet'
 import { TextField } from '../../components/TextField/TextField'
 import { useToast } from '../../components/Toast/toastContext'
 import { categoriesRepository } from '../../features/categories/repository'
@@ -11,44 +9,27 @@ import {
   firstGrapheme,
   validateCategoryDraft,
 } from '../../features/categories/validation'
-import { transactionsRepository } from '../../features/transactions/repository'
 import type { Category, CategoryType } from '../../types/entities'
-import { pluralRu } from '../../utils/plural'
+import { keepFocus } from '../../utils/keepFocus'
 import styles from './CategorySheet.module.css'
 
-interface CategorySheetProps {
-  open: boolean
+interface CategoryFormProps {
   /** null — создание новой категории типа type. */
   category: Category | null
   type: CategoryType
   existing: readonly Category[]
-  onClose: () => void
-}
-
-export function CategorySheet({ open, category, type, existing, onClose }: CategorySheetProps) {
-  const title = category ? 'Категория' : type === 'expense' ? 'Новая категория расходов' : 'Новая категория доходов'
-  return (
-    <Sheet open={open} onClose={onClose} title={title}>
-      <CategoryForm category={category} type={type} existing={existing} onDone={onClose} />
-    </Sheet>
-  )
-}
-
-interface CategoryFormProps {
-  category: Category | null
-  type: CategoryType
-  existing: readonly Category[]
   onDone: () => void
+  /** Есть только у существующей своей категории. */
+  onDelete?: () => void
 }
 
-function CategoryForm({ category, type, existing, onDone }: CategoryFormProps) {
+export function CategoryForm({ category, type, existing, onDone, onDelete }: CategoryFormProps) {
   const [name, setName] = useState(category?.name ?? '')
   const [icon, setIcon] = useState(category?.icon ?? CATEGORY_ICON_CHOICES[0])
   const [customIcon, setCustomIcon] = useState('')
   const [attempted, setAttempted] = useState(false)
   const [busy, setBusy] = useState(false)
   const toast = useToast()
-  const confirm = useConfirm()
 
   const result = validateCategoryDraft({ name, icon, type: category?.type ?? type }, existing, category?.id ?? null)
   const errors = attempted && !result.ok ? result.errors : {}
@@ -67,29 +48,6 @@ function CategoryForm({ category, type, existing, onDone }: CategoryFormProps) {
     } catch (error) {
       setBusy(false)
       toast.show(error instanceof Error ? error.message : 'Не удалось сохранить', { tone: 'error' })
-    }
-  }
-
-  const handleDelete = async () => {
-    if (!category) return
-    const count = await transactionsRepository.countByCategory(category.id)
-    const confirmed = await confirm({
-      title: `Удалить «${category.name}»?`,
-      message:
-        count > 0
-          ? `${count} ${pluralRu(count, ['операция останется', 'операции останутся', 'операций останутся'])} в истории с пометкой «Без категории».`
-          : undefined,
-      confirmLabel: 'Удалить',
-      tone: 'danger',
-    })
-    if (!confirmed) return
-
-    try {
-      await categoriesRepository.remove(category.id)
-      onDone()
-      toast.show('Категория удалена')
-    } catch (error) {
-      toast.show(error instanceof Error ? error.message : 'Не удалось удалить', { tone: 'error' })
     }
   }
 
@@ -123,6 +81,7 @@ function CategoryForm({ category, type, existing, onDone }: CategoryFormProps) {
               aria-checked={choice === icon}
               aria-label={choice}
               className={styles.iconOption}
+              onMouseDown={keepFocus}
               onClick={() => {
                 setIcon(choice)
                 setCustomIcon('')
@@ -151,8 +110,8 @@ function CategoryForm({ category, type, existing, onDone }: CategoryFormProps) {
         <Button type="submit" block disabled={busy}>
           {category ? 'Сохранить' : 'Создать категорию'}
         </Button>
-        {category && (
-          <Button variant="danger" block onClick={handleDelete} disabled={busy}>
+        {onDelete && (
+          <Button variant="danger" block onClick={onDelete} disabled={busy}>
             Удалить категорию
           </Button>
         )}

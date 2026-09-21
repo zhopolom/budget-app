@@ -1,0 +1,57 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.summary {
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.hint {
+  padding: 8px 4px;
+  font-size: 14px;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dayTitle {
+  padding: 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.card {
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--line);
+}
+
+.loading {
+  height: 320px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}

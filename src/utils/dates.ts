@@ -1,4 +1,4 @@
-import { format, getDaysInMonth } from 'date-fns'
+import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import type { IsoDate } from '../types/entities'
 
@@ -26,8 +26,45 @@ export function isValidIsoDate(value: string): boolean {
   return toIsoDate(fromIsoDate(value)) === value
 }
 
+/** Сдвиг календарной даты без разбора часовых поясов. */
+export function addDaysIso(iso: IsoDate, days: number): IsoDate {
+  return toIsoDate(addDays(fromIsoDate(iso), days))
+}
+
 export function toYearMonth(date: Date): YearMonth {
   return { year: date.getFullYear(), month: date.getMonth() + 1 }
+}
+
+/** Месяц операции без разбора даты: '2026-09-21' → { year: 2026, month: 9 }. */
+export function yearMonthOf(iso: IsoDate): YearMonth {
+  return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) }
+}
+
+/** '2026-09' — стабильный ключ месяца для Map, сортировки и хранения выбора. */
+export function monthKey({ year, month }: YearMonth): string {
+  return `${year}-${pad2(month)}`
+}
+
+export function fromMonthKey(key: string): YearMonth {
+  return { year: Number(key.slice(0, 4)), month: Number(key.slice(5, 7)) }
+}
+
+/** Сдвиг на N месяцев в любую сторону; год пересчитывается сам. */
+export function shiftMonth({ year, month }: YearMonth, delta: number): YearMonth {
+  const zeroBased = year * 12 + (month - 1) + delta
+  return { year: Math.floor(zeroBased / 12), month: (zeroBased % 12) + 1 }
+}
+
+export function previousMonth(ym: YearMonth): YearMonth {
+  return shiftMonth(ym, -1)
+}
+
+export function isSameYearMonth(a: YearMonth, b: YearMonth): boolean {
+  return a.year === b.year && a.month === b.month
+}
+
+export function compareYearMonth(a: YearMonth, b: YearMonth): number {
+  return a.year - b.year || a.month - b.month
 }
 
 function firstDayOf({ year, month }: YearMonth): Date {
@@ -42,6 +79,24 @@ export function daysInMonth(ym: YearMonth): number {
 export function monthDateRange(ym: YearMonth): { start: IsoDate; end: IsoDate } {
   const prefix = `${ym.year}-${pad2(ym.month)}`
   return { start: `${prefix}-01`, end: `${prefix}-${pad2(daysInMonth(ym))}` }
+}
+
+/** Понедельник первый — как в русском календаре, а не как в getDay(). */
+export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
+
+/** 0 — понедельник, 6 — воскресенье. */
+export function weekdayIndex(iso: IsoDate): number {
+  return (fromIsoDate(iso).getDay() + 6) % 7
+}
+
+export function isWeekend(iso: IsoDate): boolean {
+  return weekdayIndex(iso) >= 5
+}
+
+/** Все дни месяца строками 'yyyy-MM-dd'. */
+export function monthDays(ym: YearMonth): IsoDate[] {
+  const prefix = `${ym.year}-${pad2(ym.month)}`
+  return Array.from({ length: daysInMonth(ym) }, (_, index) => `${prefix}-${pad2(index + 1)}`)
 }
 
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
@@ -74,6 +129,16 @@ export function formatDayLabel(iso: IsoDate, today: IsoDate): string {
   const date = fromIsoDate(iso)
   const sameYear = iso.slice(0, 4) === today.slice(0, 4)
   return format(date, sameYear ? 'd MMMM' : 'd MMMM yyyy', { locale: ru })
+}
+
+/** Для дат в будущем: «Сегодня», «Завтра», «14 октября», «14 октября 2027». */
+export function formatFutureDay(iso: IsoDate, today: IsoDate): string {
+  const diff = dayDiff(iso, today)
+  if (diff === 0) return 'Сегодня'
+  if (diff === -1) return 'Завтра'
+  if (diff > 0) return formatDayLabel(iso, today)
+  const sameYear = iso.slice(0, 4) === today.slice(0, 4)
+  return format(fromIsoDate(iso), sameYear ? 'd MMMM' : 'd MMMM yyyy', { locale: ru })
 }
 
 /** Короткий вариант для строк списка: «Сегодня», «Вчера», «20 сент.». */

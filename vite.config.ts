@@ -17,8 +17,12 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // prompt, а не autoUpdate: приложение спрашивает, прежде чем перезагрузиться.
+      // Молча перезагрузить экран посреди заполнения формы — потерять введённое.
+      registerType: 'prompt',
+      // Регистрацией занимается UpdatePrompt через virtual:pwa-register/react,
+      // поэтому свой скрипт плагин не вставляет — иначе SW регистрировался бы дважды
+      injectRegister: null,
       manifestFilename: 'manifest.json',
       includeAssets: ['favicon.svg', 'apple-touch-icon-180x180.png'],
       manifest: {

@@ -1,18 +1,17 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { useState } from 'react'
 import { FullScreenLayout } from '../../app/FullScreenLayout'
-import { goBack, useSearchParam } from '../../app/navigation'
+import { goBack, navigate, useSearchParam } from '../../app/navigation'
 import { Button } from '../../components/Button/Button'
 import { useConfirm } from '../../components/Confirm/confirmContext'
 import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { useToast } from '../../components/Toast/toastContext'
 import { TransactionForm } from '../../components/TransactionForm/TransactionForm'
-import { MISSING_CATEGORY } from '../../features/categories/defaults'
-import { signedAmount } from '../../features/transactions/calculations'
+import { describeTransaction } from '../../features/transactions/labels'
 import { transactionsRepository } from '../../features/transactions/repository'
 import { useTransactionEditorData } from '../../features/transactions/useTransactionEditorData'
 import { draftFromTransaction } from '../../features/transactions/validation'
-import { Money } from '../../utils/money'
+import { toTransactionViews } from '../../features/transactions/views'
 
 export function EditTransactionPage() {
   const id = useSearchParam('id')
@@ -33,12 +32,11 @@ export function EditTransactionPage() {
 
   const handleDelete = async () => {
     if (!transaction || !data) return
-    const category = data.categories.find((item) => item.id === transaction.categoryId)
-    const amount = Money.format(signedAmount(transaction), data.settings.baseCurrency, { sign: 'always' })
+    const [view] = toTransactionViews([transaction], data.categories, data.accounts)
 
     const confirmed = await confirm({
-      title: 'Удалить операцию?',
-      message: `${category?.name ?? MISSING_CATEGORY.name}, ${amount}. Это действие нельзя отменить.`,
+      title: transaction.type === 'transfer' ? 'Удалить перевод?' : 'Удалить операцию?',
+      message: `${describeTransaction(view, data.settings.baseCurrency)}. Это действие нельзя отменить.`,
       confirmLabel: 'Удалить',
       tone: 'danger',
     })
@@ -54,7 +52,7 @@ export function EditTransactionPage() {
   }
 
   return (
-    <FullScreenLayout title="Операция" onClose={close}>
+    <FullScreenLayout title={transaction?.type === 'transfer' ? 'Перевод' : 'Операция'} onClose={close}>
       {transaction === null && (
         <EmptyState
           icon="🔍"
@@ -69,12 +67,13 @@ export function EditTransactionPage() {
           key={transaction.id}
           initial={draftFromTransaction(transaction)}
           data={data}
-          submitLabel="Сохранить"
+          mode="edit"
           onSubmit={async (input) => {
             await transactionsRepository.update(transaction.id, input)
             toast.show('Операция изменена')
             close()
           }}
+          onDuplicate={() => navigate(`/add?copy=${encodeURIComponent(transaction.id)}`, { replace: true })}
           onDelete={handleDelete}
         />
       )}

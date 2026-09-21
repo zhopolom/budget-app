@@ -27,8 +27,14 @@ export interface Account {
   updatedAt: Timestamp
 }
 
-export type TransactionType = 'expense' | 'income'
-export type CategoryType = TransactionType
+/** Перевод не относится ни к доходам, ни к расходам — у него нет категории. */
+export type TransactionType = 'expense' | 'income' | 'transfer'
+
+/** Категории бывают только у расходов и доходов. */
+export type CategoryType = 'expense' | 'income'
+
+/** Тип операции, у которой есть категория и один счёт. */
+export type EntryType = CategoryType
 
 export interface Category {
   id: Id
@@ -36,27 +42,54 @@ export interface Category {
   /** Emoji. */
   icon: string
   type: CategoryType
-  /** Системные категории создаются при первом запуске и в v0.1 не редактируются. */
+  /** Системные категории создаются при первом запуске и не редактируются. */
   isSystem: boolean
   createdAt: Timestamp
 }
 
-export interface Transaction {
+interface TransactionBase {
   id: Id
-  type: TransactionType
-  /** Всегда положительное значение; знак определяется полем type. */
+  /** Всегда положительное значение; направление определяется полем type. */
   amount: MinorUnits
-  categoryId: Id
-  accountId: Id
   date: IsoDate
   /** Пустая строка, если комментария нет. */
   note: string
+  /**
+   * Операция создана регулярным платежом. Вместе с occurrenceDate образует
+   * уникальный индекс: повторный запуск приложения не создаёт дубль.
+   */
+  recurringId?: Id
+  /** Плановая дата вхождения регулярной операции (не обязательно равна date). */
+  occurrenceDate?: IsoDate
   createdAt: Timestamp
   updatedAt: Timestamp
 }
 
-/** Задел на будущее: лимиты по категориям. В v0.1 интерфейса нет. */
-export interface CategoryLimit {
+/** Расход или доход: один счёт и обязательная категория. */
+export interface EntryTransaction extends TransactionBase {
+  type: EntryType
+  accountId: Id
+  categoryId: Id
+}
+
+/**
+ * Перевод между своими счетами: уменьшает один счёт и увеличивает другой.
+ * Общий капитал не меняется, в доходы/расходы и в бюджет не попадает.
+ */
+export interface TransferTransaction extends TransactionBase {
+  type: 'transfer'
+  fromAccountId: Id
+  toAccountId: Id
+}
+
+/**
+ * Размеченное объединение: TypeScript не даст прочитать categoryId у перевода
+ * или fromAccountId у расхода, пока тип не сужен. Хелперы — в features/transactions/model.ts.
+ */
+export type Transaction = EntryTransaction | TransferTransaction
+
+/** Задел v0.1: лимиты категорий хранились внутри Budget. С v2 живут в отдельной таблице. */
+export interface LegacyCategoryLimit {
   categoryId: Id
   limit: MinorUnits
 }
@@ -68,7 +101,53 @@ export interface Budget {
   month: number
   year: number
   totalLimit: MinorUnits
-  categoryLimits?: CategoryLimit[]
+  /** @deprecated Осталось от v0.1, миграция v2 переносит значения в categoryBudgets. */
+  categoryLimits?: LegacyCategoryLimit[]
+}
+
+/**
+ * Лимит расходов по одной категории на конкретный месяц.
+ * Работает дополнительно к общему месячному бюджету: сумма лимитов
+ * не обязана совпадать с общим бюджетом.
+ */
+export interface CategoryBudget {
+  /** Детерминированный id вида '2026-09:cat-exp-groceries'. */
+  id: Id
+  categoryId: Id
+  /** 1–12 */
+  month: number
+  year: number
+  limitAmount: MinorUnits
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
+
+/**
+ * Регулярная операция: аренда, подписка, зарплата.
+ * Приложение без backend, поэтому операции создаются при запуске —
+ * см. features/recurring/occurrences.ts.
+ */
+export interface RecurringTransaction {
+  id: Id
+  type: EntryType
+  amount: MinorUnits
+  categoryId: Id
+  accountId: Id
+  note: string
+  frequency: RecurrenceFrequency
+  /** Каждые N периодов, >= 1. */
+  interval: number
+  startDate: IsoDate
+  /** Ближайшее ещё не созданное вхождение. Кэш поверх startDate + frequency. */
+  nextOccurrence: IsoDate
+  /** Включительно. Отсутствует — повторяется бессрочно. */
+  endDate?: IsoDate
+  isActive: boolean
+  lastGeneratedAt?: Timestamp
+  createdAt: Timestamp
+  updatedAt: Timestamp
 }
 
 export type ThemePreference = 'system' | 'light' | 'dark'

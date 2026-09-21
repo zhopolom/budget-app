@@ -1,8 +1,12 @@
 import { useLayoutEffect, useRef } from 'react'
 import type { CurrencyCode, TransactionType } from '../../types/entities'
+
 import { releaseKeyboardPrimer } from '../../utils/keyboardPrimer'
 import { Money } from '../../utils/money'
 import styles from './AmountInput.module.css'
+
+/** У перевода нет знака: сумма не прибавляется и не вычитается, а переезжает. */
+const SIGN_GLYPHS: Record<TransactionType, string> = { expense: '−', income: '+', transfer: '→' }
 
 interface AmountInputProps {
   value: string
@@ -29,7 +33,7 @@ export function AmountInput({ value, onChange, type, currency, autoFocus = false
       <label className={styles.row} data-invalid={error ? true : undefined}>
         <span className="visually-hidden">Сумма</span>
         <span className={styles.sign} data-type={type} aria-hidden="true">
-          {type === 'expense' ? '−' : '+'}
+          {SIGN_GLYPHS[type]}
         </span>
         <input
           ref={ref}

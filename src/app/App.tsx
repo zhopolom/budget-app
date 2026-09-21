@@ -1,9 +1,12 @@
 import { ConfirmProvider } from '../components/Confirm/ConfirmProvider'
 import { ToastProvider } from '../components/Toast/ToastProvider'
+import { useRecurringGeneration } from '../features/recurring/useRecurringGeneration'
 import { useApplyTheme } from '../features/settings/theme'
 import { useSettings } from '../features/settings/useSettings'
 import { useKeyboardInset } from '../hooks/useKeyboardInset'
+import { useToday } from '../hooks/useToday'
 import { AppRouter } from './router'
+import { UpdatePrompt } from './UpdatePrompt'
 
 export function App() {
   const settings = useSettings()
@@ -13,8 +16,16 @@ export function App() {
   return (
     <ToastProvider>
       <ConfirmProvider>
+        <RecurringRunner />
         <AppRouter />
+        <UpdatePrompt />
       </ConfirmProvider>
     </ToastProvider>
   )
+}
+
+/** Отдельный компонент: генерации нужен useToast, а он живёт внутри ToastProvider. */
+function RecurringRunner() {
+  useRecurringGeneration(useToday())
+  return null
 }

@@ -1,0 +1,75 @@
+.bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+}
+
+.title {
+  flex: 1;
+  min-width: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Без заголовка переключатель занимает всю строку */
+.bar[data-standalone] .switcher {
+  flex: 1;
+  justify-content: space-between;
+}
+
+/* Мелкий контрол — самая лёгкая ступень стекла: он не должен спорить с цифрами */
+.switcher {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 999px;
+  --glass-shadow: 0 4px 14px -10px rgba(28, 24, 41, 0.35);
+}
+
+.month {
+  min-width: 9ch;
+  padding: 0 4px;
+  font-size: 17px;
+  font-weight: 650;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.arrow {
+  display: grid;
+  flex-shrink: 0;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--ink);
+  transition:
+    background-color 0.15s,
+    transform 0.12s var(--ease-out);
+}
+
+/* Реакция на нажатие мягкая: резкое сжатие спорит с ощущением материала */
+.arrow:active {
+  background: var(--glass-highlight);
+  transform: scale(0.97);
+}
+
+.today {
+  flex-shrink: 0;
+  min-height: 36px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-text);
+  font-size: 14px;
+  font-weight: 600;
+}

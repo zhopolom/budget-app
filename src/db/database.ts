@@ -1,5 +1,13 @@
 import Dexie, { type Table } from 'dexie'
-import type { Account, AppSettings, Budget, Category, Transaction } from '../types/entities'
+import type {
+  Account,
+  AppSettings,
+  Budget,
+  Category,
+  CategoryBudget,
+  RecurringTransaction,
+  Transaction,
+} from '../types/entities'
 import { DB_VERSION, migrations } from './migrations'
 import { seedDefaults } from './seed'
 
@@ -11,6 +19,8 @@ export class BudgetDatabase extends Dexie {
   declare categories: Table<Category, string>
   declare transactions: Table<Transaction, string>
   declare budgets: Table<Budget, string>
+  declare categoryBudgets: Table<CategoryBudget, string>
+  declare recurringTransactions: Table<RecurringTransaction, string>
   declare settings: Table<AppSettings, string>
 
   constructor(name: string = DB_NAME) {

@@ -29,17 +29,26 @@
   color: var(--negative);
 }
 
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Над клавиатурой, когда она открыта; у нижнего края — когда закрыта */
 .submitBar {
   position: fixed;
   right: 0;
-  bottom: var(--keyboard-inset, 0px);
+  bottom: 0;
   left: 0;
   z-index: 5;
   padding: 16px max(var(--page-x), env(safe-area-inset-right))
     max(12px, calc(env(safe-area-inset-bottom) + 12px - var(--keyboard-inset, 0px)))
     max(var(--page-x), env(safe-area-inset-left));
   background: linear-gradient(to top, var(--bg) 70%, transparent);
+  /* Трансформ вместо смещения bottom: не пересчитывает раскладку на каждый кадр */
+  transform: translateY(calc(var(--keyboard-inset, 0px) * -1));
+  transition: transform 0.22s var(--ease-out);
 }
 
 .submitInner {

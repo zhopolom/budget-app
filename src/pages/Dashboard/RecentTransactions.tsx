@@ -1,14 +1,10 @@
 import { EmptyState } from '../../components/EmptyState/EmptyState'
-import { navigate } from '../../app/navigation'
 import { Link } from '../../components/Link/Link'
-import { TransactionItem } from '../../components/TransactionItem/TransactionItem'
+import { TransactionRow } from '../../components/TransactionItem/TransactionRow'
 import type { TransactionView } from '../../features/transactions/views'
-import type { CurrencyCode, Id, IsoDate } from '../../types/entities'
+import type { CurrencyCode, IsoDate } from '../../types/entities'
 import { formatDayShort } from '../../utils/dates'
 import styles from './RecentTransactions.module.css'
-
-// Вне компонента — стабильная ссылка, memo у TransactionItem не сбрасывается
-const openTransaction = (id: Id) => navigate(`/edit?id=${encodeURIComponent(id)}`)
 
 interface RecentTransactionsProps {
   items: TransactionView[]
@@ -42,10 +38,10 @@ export function RecentTransactions({ items, currency, today }: RecentTransaction
         <ul className={`${styles.card} ${styles.list}`}>
           {items.map((view) => (
             <li key={view.transaction.id} className={styles.row}>
-              <TransactionItem
+              <TransactionRow
                 view={view}
-                currency={currency} dayLabel={formatDayShort(view.transaction.date, today)}
-                onSelect={openTransaction}
+                currency={currency}
+                dayLabel={formatDayShort(view.transaction.date, today)}
               />
             </li>
           ))}
