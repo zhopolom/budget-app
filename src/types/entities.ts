@@ -124,17 +124,9 @@ export interface CategoryBudget {
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
-/**
- * Регулярная операция: аренда, подписка, зарплата.
- * Приложение без backend, поэтому операции создаются при запуске —
- * см. features/recurring/occurrences.ts.
- */
-export interface RecurringTransaction {
+interface RecurringBase {
   id: Id
-  type: EntryType
   amount: MinorUnits
-  categoryId: Id
-  accountId: Id
   note: string
   frequency: RecurrenceFrequency
   /** Каждые N периодов, >= 1. */
@@ -149,6 +141,29 @@ export interface RecurringTransaction {
   createdAt: Timestamp
   updatedAt: Timestamp
 }
+
+/** Регулярный расход или доход: аренда, подписка, зарплата. */
+export interface RecurringEntry extends RecurringBase {
+  type: EntryType
+  accountId: Id
+  categoryId: Id
+}
+
+/** Регулярный перевод: «каждый месяц 2000 ₴ с карты на накопительный». */
+export interface RecurringTransfer extends RecurringBase {
+  type: 'transfer'
+  fromAccountId: Id
+  toAccountId: Id
+}
+
+/**
+ * Регулярная операция. Размечена так же, как Transaction: у перевода нет
+ * категории, у расхода нет счетов перевода.
+ *
+ * Приложение без backend, поэтому операции создаются при запуске —
+ * см. features/recurring/occurrences.ts.
+ */
+export type RecurringTransaction = RecurringEntry | RecurringTransfer
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 

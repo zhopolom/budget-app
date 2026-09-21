@@ -6,11 +6,12 @@ import { Money } from '../../utils/money'
 import { DEFAULT_ACCOUNT_IDS } from '../accounts/defaults'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
 import { MAX_OCCURRENCES_PER_RUN } from './occurrences'
-import { recurringRepository, type RecurringInput } from './repository'
+import { recurringRepository } from './repository'
+import type { RecurringEntryInput } from './repository'
 
 const { card } = DEFAULT_ACCOUNT_IDS
 
-const spotify = (patch: Partial<RecurringInput> = {}): RecurringInput => ({
+const spotify = (patch: Partial<RecurringEntryInput> = {}): RecurringEntryInput => ({
   type: 'expense',
   amount: Money.fromMajor(199),
   categoryId: C.subscriptions,
@@ -24,7 +25,7 @@ const spotify = (patch: Partial<RecurringInput> = {}): RecurringInput => ({
 })
 
 /** Расписание прямо в базу: create сдвигает первое вхождение на сегодня. */
-async function seedRule(patch: Partial<RecurringInput> & { nextOccurrence?: string } = {}): Promise<Id> {
+async function seedRule(patch: Partial<RecurringEntryInput> & { nextOccurrence?: string } = {}): Promise<Id> {
   const { nextOccurrence, ...input } = patch
   const base = spotify(input)
   const id = `rule-${await db.recurringTransactions.count()}`
@@ -225,10 +226,10 @@ describe('create и update', () => {
 
   it('setActive выключает и включает расписание', async () => {
     const id = await seedRule()
-    await recurringRepository.setActive(id, false)
+    await recurringRepository.setActive(id, false, '2026-09-21')
     expect((await db.recurringTransactions.get(id))?.isActive).toBe(false)
 
-    await recurringRepository.setActive(id, true)
+    await recurringRepository.setActive(id, true, '2026-09-21')
     expect((await db.recurringTransactions.get(id))?.isActive).toBe(true)
   })
 

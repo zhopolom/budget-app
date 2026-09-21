@@ -6,7 +6,8 @@ import { Money } from '../../utils/money'
 import { DEFAULT_ACCOUNT_IDS } from '../accounts/defaults'
 import { accountsRepository } from '../accounts/repository'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
-import { recurringRepository, type RecurringInput } from './repository'
+import { recurringRepository } from './repository'
+import type { RecurringEntryInput } from './repository'
 
 /**
  * Регрессии на два бага v0.2. Тесты написаны до исправления и падали:
@@ -16,7 +17,7 @@ import { recurringRepository, type RecurringInput } from './repository'
 
 const { card, cash } = DEFAULT_ACCOUNT_IDS
 
-const subscription = (patch: Partial<RecurringInput> = {}): RecurringInput => ({
+const subscription = (patch: Partial<RecurringEntryInput> = {}): RecurringEntryInput => ({
   type: 'expense',
   amount: Money.fromMajor(199),
   categoryId: C.subscriptions,
@@ -30,7 +31,7 @@ const subscription = (patch: Partial<RecurringInput> = {}): RecurringInput => ({
 })
 
 /** Правило прямо в базу: create сдвигает первое вхождение на сегодня. */
-async function seedRule(patch: Partial<RecurringInput> & { nextOccurrence?: string } = {}): Promise<Id> {
+async function seedRule(patch: Partial<RecurringEntryInput> & { nextOccurrence?: string } = {}): Promise<Id> {
   const { nextOccurrence, ...input } = patch
   const base = subscription(input)
   const id = `rule-${await db.recurringTransactions.count()}`

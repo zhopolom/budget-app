@@ -109,7 +109,8 @@ describe('categoriesRepository.replaceAndRemove', () => {
 
     await categoriesRepository.replaceAndRemove(category.id, C.cafe)
 
-    expect((await db.recurringTransactions.get(recurring.id))?.categoryId).toBe(C.cafe)
+    const moved = await db.recurringTransactions.get(recurring.id)
+    expect(moved && 'categoryId' in moved && moved.categoryId).toBe(C.cafe)
   })
 
   it('снимает лимиты удаляемой категории и не трогает чужие', async () => {

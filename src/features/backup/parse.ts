@@ -147,22 +147,18 @@ function parseCategoryBudget(value: unknown): CategoryBudget | null {
 
 function parseRecurring(value: unknown): RecurringTransaction | null {
   if (!isObject(value)) return null
-  const { id, type, amount, categoryId, accountId, note, frequency, interval } = value
+  const { id, type, amount, note, frequency, interval } = value
   const { startDate, nextOccurrence, endDate, isActive, lastGeneratedAt, createdAt, updatedAt } = value
 
-  if (!isId(id) || typeof type !== 'string' || !CATEGORY_TYPES.has(type)) return null
-  if (!isAmount(amount) || !isId(categoryId) || !isId(accountId)) return null
+  if (!isId(id) || !isAmount(amount)) return null
   if (typeof frequency !== 'string' || !FREQUENCIES.has(frequency)) return null
   if (!Number.isInteger(interval) || (interval as number) < 1) return null
   if (!isDate(startDate) || !isDate(nextOccurrence)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
-  return {
+  const base = {
     id,
-    type: type as RecurringTransaction['type'],
     amount: amount as number,
-    categoryId,
-    accountId,
     note: isText(note) ? note : '',
     frequency: frequency as RecurringTransaction['frequency'],
     interval: interval as number,
@@ -174,6 +170,21 @@ function parseRecurring(value: unknown): RecurringTransaction | null {
     createdAt: stamp,
     updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
   }
+
+  // Регулярные переводы появились в v0.3; копии v0.2 знают только расходы и доходы
+  if (type === 'transfer') {
+    const { fromAccountId, toAccountId } = value
+    if (!isId(fromAccountId) || !isId(toAccountId)) return null
+    return { ...base, type: 'transfer', fromAccountId, toAccountId }
+  }
+
+  if (type === 'expense' || type === 'income') {
+    const { accountId, categoryId } = value
+    if (!isId(accountId) || !isId(categoryId)) return null
+    return { ...base, type, accountId, categoryId }
+  }
+
+  return null
 }
 
 function parseSettings(value: unknown): AppSettings {
@@ -235,15 +246,21 @@ function migrateLegacyCategoryLimits(budgets: readonly unknown[]): CategoryBudge
   return moved
 }
 
+/**
+ * Сколько записей в копии ссылается на несуществующие счета или категории.
+ * Считаем и операции, и расписания: у правила ссылка на удалённый счёт
+ * опаснее — оно продолжит создавать операции в никуда.
+ */
 function countDangling(data: BackupData): number {
   const accounts = new Set(data.accounts.map((account) => account.id))
   const categories = new Set(data.categories.map((category) => category.id))
 
-  return data.transactions.filter((transaction) =>
-    transaction.type === 'transfer'
-      ? !accounts.has(transaction.fromAccountId) || !accounts.has(transaction.toAccountId)
-      : !accounts.has(transaction.accountId) || !categories.has(transaction.categoryId),
-  ).length
+  const isBroken = (item: BackupData['transactions'][number] | BackupData['recurringTransactions'][number]) =>
+    item.type === 'transfer'
+      ? !accounts.has(item.fromAccountId) || !accounts.has(item.toAccountId)
+      : !accounts.has(item.accountId) || !categories.has(item.categoryId)
+
+  return data.transactions.filter(isBroken).length + data.recurringTransactions.filter(isBroken).length
 }
 
 export function parseBackup(text: string): ParseBackupResult {

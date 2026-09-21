@@ -5,7 +5,6 @@ import { useToast } from '../../components/Toast/toastContext'
 import { ACCOUNT_TYPE_ICONS } from '../../features/accounts/labels'
 import { accountsRepository } from '../../features/accounts/repository'
 import type { AccountWithBalance } from '../../features/accounts/useAccountsOverview'
-import { transactionsRepository } from '../../features/transactions/repository'
 import type { Account, CurrencyCode, Id } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
@@ -22,15 +21,26 @@ interface DeleteAccountPanelProps {
   onCreateAccount: () => void
 }
 
-const operationsLabel = (count: number) => `${count} ${pluralRu(count, ['операция', 'операции', 'операций'])}`
+/** «12 операций и 2 регулярных платежа» — оба вида ссылок в одной фразе. */
+function usageLabel({ transactions, recurring }: { transactions: number; recurring: number }): string {
+  const parts: string[] = []
+  if (transactions > 0) parts.push(`${transactions} ${pluralRu(transactions, ['операция', 'операции', 'операций'])}`)
+  if (recurring > 0) {
+    parts.push(
+      `${recurring} ${pluralRu(recurring, ['регулярный платёж', 'регулярных платежа', 'регулярных платежей'])}`,
+    )
+  }
+  return parts.join(' и ')
+}
 
 export function DeleteAccountPanel({ account, candidates, currency, onCancel, onDone, onCreateAccount }: DeleteAccountPanelProps) {
-  const count = useLiveQuery(() => transactionsRepository.countByAccount(account.id), [account.id])
+  const usage = useLiveQuery(() => accountsRepository.countUsage(account.id), [account.id])
   const [chosenId, setChosenId] = useState<Id | null>(null)
   const [busy, setBusy] = useState(false)
   const toast = useToast()
 
-  if (count === undefined) return null
+  if (!usage) return null
+  const used = usage.transactions + usage.recurring
 
   // Единственный кандидат выбран сразу; если их несколько — выбор за пользователем.
   // Вычисляем на каждом рендере: только что созданный счёт приходит из живого
@@ -50,13 +60,31 @@ export function DeleteAccountPanel({ account, candidates, currency, onCancel, on
     }
   }
 
+  const transferAndRemove = async (targetId: Id, targetName: string) => {
+    setBusy(true)
+    try {
+      const result = await accountsRepository.transferAndRemove(account.id, targetId)
+      onDone()
+      toast.show(`Перенесено на «${targetName}», счёт удалён`)
+
+      // Регулярный перевод, у которого обе стороны свелись к одному счёту,
+      // продолжал бы создавать бессмысленные операции — он выключен
+      for (const stopped of result.stoppedRecurring) {
+        toast.show(`Регулярный перевод «${stopped.note.trim() || 'без названия'}» остановлен: оба счёта совпали`)
+      }
+    } catch (error) {
+      setBusy(false)
+      toast.show(error instanceof Error ? error.message : 'Не удалось удалить счёт', { tone: 'error' })
+    }
+  }
+
   // Некуда переносить: сначала нужен другой счёт
   if (candidates.length === 0) {
     return (
       <div className={styles.panel}>
         <p className={styles.text}>
-          {count > 0
-            ? `На счёте «${account.name}» ${operationsLabel(count)}. Удалить их вместе со счётом нельзя — их нужно перенести на другой счёт, а другого пока нет.`
+          {used > 0
+            ? `На счёте «${account.name}» ${usageLabel(usage)}. Удалить вместе со счётом нельзя — нужно перенести на другой счёт, а другого пока нет.`
             : `«${account.name}» — единственный счёт. Без счёта нельзя добавлять операции, поэтому сначала создайте другой.`}
         </p>
         <div className={styles.actions}>
@@ -71,11 +99,11 @@ export function DeleteAccountPanel({ account, candidates, currency, onCancel, on
     )
   }
 
-  // Операции исчезли, пока окно было открыто (например, их удалили) — переносить нечего
-  if (count === 0) {
+  // Ссылок не осталось (например, операции удалили, пока окно было открыто) — переносить нечего
+  if (used === 0) {
     return (
       <div className={styles.panel}>
-        <p className={styles.text}>Операций на счёте «{account.name}» нет.</p>
+        <p className={styles.text}>На счёт «{account.name}» ничего не ссылается.</p>
         <div className={styles.actions}>
           <Button variant="destructive" block disabled={busy} onClick={() => run(() => accountsRepository.remove(account.id), 'Счёт удалён')}>
             Удалить счёт
@@ -91,7 +119,7 @@ export function DeleteAccountPanel({ account, candidates, currency, onCancel, on
   return (
     <div className={styles.panel}>
       <p className={styles.text}>
-        На счёте «{account.name}» {operationsLabel(count)}. Чтобы сохранить финансовую историю, выберите счёт, на который их
+        На счёте «{account.name}» {usageLabel(usage)}. Чтобы сохранить финансовую историю, выберите счёт, на который всё
         перенести.
       </p>
 
@@ -127,13 +155,7 @@ export function DeleteAccountPanel({ account, candidates, currency, onCancel, on
           variant="destructive"
           block
           disabled={!target || busy}
-          onClick={() =>
-            target &&
-            run(
-              () => accountsRepository.transferAndRemove(account.id, target.id),
-              `Операции перенесены на «${target.name}», счёт удалён`,
-            )
-          }
+          onClick={() => target && void transferAndRemove(target.id, target.name)}
         >
           Перенести и удалить счёт
         </Button>

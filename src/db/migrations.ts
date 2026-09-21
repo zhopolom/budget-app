@@ -1,7 +1,7 @@
 import type { Transaction as DexieTransaction } from 'dexie'
 import { categoryBudgetIdFor } from '../features/budgets/ids'
 import type { Budget, CategoryBudget } from '../types/entities'
-import { SCHEMA_V1, SCHEMA_V2 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
 
 export interface Migration {
   version: number
@@ -83,6 +83,15 @@ export const migrations: readonly Migration[] = [
      * Единственное преобразование данных — переезд лимитов категорий.
      */
     upgrade: moveCategoryLimits,
+  },
+  {
+    version: 3,
+    description: 'Регулярные переводы и индексы ссылок на счета у расписаний',
+    stores: SCHEMA_V3,
+    /**
+     * Правила v0.2 — это расходы и доходы с accountId и categoryId, то есть
+     * уже готовые RecurringEntry: переписывать их не нужно.
+     */
   },
 ]
 

@@ -1,15 +1,19 @@
 import Dexie from 'dexie'
 import { db } from '../../db/database'
-import type { Id, IsoDate, RecurringTransaction, Transaction } from '../../types/entities'
+import type { Id, IsoDate, RecurringEntry, RecurringTransaction, RecurringTransfer, Transaction } from '../../types/entities'
 import { addDaysIso } from '../../utils/dates'
 import { createId } from '../../utils/id'
 import { MAX_OCCURRENCES_PER_RUN, nextOccurrenceOnOrAfter, occurrencesBetween } from './occurrences'
 
-/** Данные регулярной операции без служебных полей: nextOccurrence считается сам. */
-export type RecurringInput = Omit<
-  RecurringTransaction,
-  'id' | 'nextOccurrence' | 'lastGeneratedAt' | 'createdAt' | 'updatedAt'
->
+/**
+ * Данные регулярной операции без служебных полей: nextOccurrence считается сам.
+ * Omit по объединению не распределяется сам, поэтому ветки перечислены явно —
+ * иначе поля перевода и расхода слиплись бы в один тип.
+ */
+type Draft<T> = Omit<T, 'id' | 'nextOccurrence' | 'lastGeneratedAt' | 'createdAt' | 'updatedAt'>
+export type RecurringEntryInput = Draft<RecurringEntry>
+export type RecurringTransferInput = Draft<RecurringTransfer>
+export type RecurringInput = RecurringEntryInput | RecurringTransferInput
 
 export interface GenerationResult {
   /** Сколько операций создано. */
@@ -29,6 +33,25 @@ async function generatedDatesOf(recurringId: Id): Promise<Set<IsoDate>> {
 
   // Ключ составного индекса приходит массивом [recurringId, occurrenceDate]
   return new Set(keys.map((key) => String((key as unknown as [Id, IsoDate])[1])))
+}
+
+/** Операция, созданная расписанием. Перевод получает оба счёта, расход — категорию. */
+function transactionFromRule(rule: RecurringTransaction, date: IsoDate, now: number): Transaction {
+  const base = {
+    id: createId(),
+    amount: rule.amount,
+    date,
+    note: rule.note,
+    recurringId: rule.id,
+    occurrenceDate: date,
+    createdAt: now,
+    updatedAt: now,
+  }
+
+  if (rule.type === 'transfer') {
+    return { ...base, type: 'transfer', fromAccountId: rule.fromAccountId, toAccountId: rule.toAccountId }
+  }
+  return { ...base, type: rule.type, accountId: rule.accountId, categoryId: rule.categoryId }
 }
 
 export const recurringRepository = {
@@ -83,9 +106,56 @@ export const recurringRepository = {
     })
   },
 
-  async setActive(id: Id, isActive: boolean): Promise<void> {
-    const updated = await db.recurringTransactions.update(id, { isActive, updatedAt: Date.now() })
-    if (updated === 0) throw new Error('Регулярная операция не найдена')
+  /**
+   * Выключает и включает расписание.
+   *
+   * Пауза по умолчанию означает, что за это время платежей не было: при
+   * включении ближайшее вхождение пересчитывается от сегодняшнего дня.
+   * Иначе первый же generateDue создал бы платежи за всю паузу — ровно этот
+   * баг и чинится. Досоздать пропущенное можно только явно, backfill: true.
+   *
+   * Все пути включения идут сюда: прямой update(..., { isActive: true })
+   * в коде запрещён, потому что он не трогает nextOccurrence.
+   */
+  async setActive(id: Id, isActive: boolean, today: IsoDate, options: { backfill?: boolean } = {}): Promise<void> {
+    await db.transaction('rw', db.recurringTransactions, async () => {
+      const rule = await db.recurringTransactions.get(id)
+      if (!rule) throw new Error('Регулярная операция не найдена')
+
+      const now = Date.now()
+
+      // Выключение nextOccurrence не трогает: вернёмся — пересчитаем
+      if (!isActive) {
+        await db.recurringTransactions.update(id, { isActive: false, updatedAt: now })
+        return
+      }
+
+      if (options.backfill) {
+        await db.recurringTransactions.update(id, { isActive: true, updatedAt: now })
+        return
+      }
+
+      const from = rule.startDate > today ? rule.startDate : today
+      const next = nextOccurrenceOnOrAfter(rule, from)
+      if (next === null) {
+        throw new Error('Расписание уже закончилось — измените дату окончания')
+      }
+
+      await db.recurringTransactions.update(id, { isActive: true, nextOccurrence: next, updatedAt: now })
+    })
+  },
+
+  /**
+   * Сколько вхождений накопилось в промежутке [nextOccurrence; today] и ещё не
+   * создано. Столько платежей предложит досоздать диалог при возобновлении.
+   */
+  async countMissed(id: Id, today: IsoDate): Promise<number> {
+    const rule = await db.recurringTransactions.get(id)
+    if (!rule) return 0
+
+    const dates = occurrencesBetween(rule, rule.nextOccurrence, today, MAX_OCCURRENCES_PER_RUN)
+    const already = await generatedDatesOf(id)
+    return dates.filter((date) => !already.has(date)).length
   },
 
   /** Удаляет расписание. Уже созданные им операции остаются в истории. */
@@ -126,19 +196,7 @@ export const recurringRepository = {
 
         const now = Date.now()
         if (fresh.length > 0) {
-          const rows: Transaction[] = fresh.map((date) => ({
-            id: createId(),
-            type: rule.type,
-            amount: rule.amount,
-            categoryId: rule.categoryId,
-            accountId: rule.accountId,
-            date,
-            note: rule.note,
-            recurringId: rule.id,
-            occurrenceDate: date,
-            createdAt: now,
-            updatedAt: now,
-          }))
+          const rows = fresh.map((date) => transactionFromRule(rule, date, now))
           await db.transactions.bulkAdd(rows)
           created += rows.length
           rules += 1

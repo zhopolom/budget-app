@@ -12,7 +12,8 @@ async function getCustom(id: Id): Promise<Category> {
 
 /** Где ещё встречается категория, кроме операций. */
 async function countRecurring(categoryId: Id): Promise<number> {
-  return db.recurringTransactions.filter((recurring) => recurring.categoryId === categoryId).count()
+  // Индекс categoryId заведён в схеме v3; переводы в него не попадают
+  return db.recurringTransactions.where('categoryId').equals(categoryId).count()
 }
 
 export const categoriesRepository = {
@@ -90,8 +91,14 @@ export const categoriesRepository = {
         })
 
       await db.recurringTransactions
-        .filter((recurring) => recurring.categoryId === sourceId)
-        .modify({ categoryId: targetId, updatedAt: now })
+        .where('categoryId')
+        .equals(sourceId)
+        .modify((rule) => {
+          // Перевод в индекс categoryId не попадает, но сузить тип всё равно нужно
+          if (rule.type === 'transfer') return
+          rule.categoryId = targetId
+          rule.updatedAt = now
+        })
 
       // Контрольная проверка перед удалением: исключение здесь откатит всё
       const left = await categoriesRepository.countUsage(sourceId)
