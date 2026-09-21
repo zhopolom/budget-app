@@ -1,0 +1,143 @@
+.calendar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.weekdays,
+.grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 4px;
+}
+
+.weekday {
+  padding-bottom: 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--ink-2);
+}
+
+.pad {
+  aspect-ratio: 1;
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  aspect-ratio: 1;
+  min-height: 44px;
+  padding: 2px;
+  border: 1.5px solid transparent;
+  border-radius: 12px;
+  background: var(--surface-2);
+  color: var(--ink);
+  transition:
+    transform 0.12s var(--ease-out),
+    border-color 0.15s;
+}
+
+.day:active {
+  transform: scale(0.94);
+}
+
+.day[data-empty] {
+  background: transparent;
+}
+
+.day[data-weekend] .number {
+  color: var(--ink-2);
+}
+
+/* Четыре ступени насыщенности вместо плавной шкалы: разница читается сразу */
+.day[data-intensity='1'] {
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+
+.day[data-intensity='2'] {
+  background: color-mix(in srgb, var(--accent) 22%, var(--surface-2));
+}
+
+.day[data-intensity='3'] {
+  background: color-mix(in srgb, var(--accent) 36%, var(--surface-2));
+}
+
+.day[data-intensity='4'] {
+  background: color-mix(in srgb, var(--accent) 52%, var(--surface-2));
+  color: var(--accent-ink);
+}
+
+.day[data-intensity='4'] .amount,
+.day[data-intensity='4'] .number {
+  color: inherit;
+}
+
+.day[data-today] {
+  border-color: var(--accent);
+}
+
+.day[data-selected] {
+  border-color: var(--ink);
+}
+
+.number {
+  font-family: var(--font-num);
+  font-size: 14px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.amount {
+  font-family: var(--font-num);
+  font-size: 10px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+  white-space: nowrap;
+}
+
+/* Точка отмечает доход или перевод — трат в этот день не было */
+.dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: transparent;
+}
+
+.dot[data-visible] {
+  background: var(--ink-2);
+}
+
+/* Без color-mix ступени схлопнулись бы в один цвет — оставляем прозрачность */
+@supports not (background: color-mix(in srgb, red 10%, blue)) {
+  .day[data-intensity='1'] {
+    background: var(--accent-soft);
+  }
+
+  .day[data-intensity='2'],
+  .day[data-intensity='3'],
+  .day[data-intensity='4'] {
+    background: var(--accent);
+    color: var(--accent-ink);
+  }
+
+  .day[data-intensity='2'] {
+    opacity: 0.55;
+  }
+
+  .day[data-intensity='3'] {
+    opacity: 0.8;
+  }
+}

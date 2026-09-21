@@ -6,6 +6,10 @@ import {
   fromMonthKey,
   isSameYearMonth,
   isValidIsoDate,
+  isWeekend,
+  formatFutureDay,
+  monthDays,
+  weekdayIndex,
   monthDateRange,
   monthKey,
   previousMonth,
@@ -70,5 +74,30 @@ describe('даты', () => {
     expect(formatDayLabel('2026-09-20', '2026-09-21')).toBe('Вчера')
     expect(formatDayLabel('2026-09-10', '2026-09-21')).toBe('10 сентября')
     expect(formatDayLabel('2025-09-10', '2026-09-21')).toBe('10 сентября 2025')
+  })
+})
+
+describe('календарь', () => {
+  it('неделя начинается с понедельника', () => {
+    expect(weekdayIndex('2026-09-21')).toBe(0) // понедельник
+    expect(weekdayIndex('2026-09-27')).toBe(6) // воскресенье
+    expect(isWeekend('2026-09-26')).toBe(true)
+    expect(isWeekend('2026-09-25')).toBe(false)
+  })
+
+  it('перечисляет все дни месяца', () => {
+    const september = monthDays({ year: 2026, month: 9 })
+    expect(september).toHaveLength(30)
+    expect(september[0]).toBe('2026-09-01')
+    expect(september.at(-1)).toBe('2026-09-30')
+    expect(monthDays({ year: 2024, month: 2 })).toHaveLength(29)
+  })
+
+  it('дату в будущем подписывает отдельно от прошлой', () => {
+    expect(formatFutureDay('2026-09-21', '2026-09-21')).toBe('Сегодня')
+    expect(formatFutureDay('2026-09-22', '2026-09-21')).toBe('Завтра')
+    expect(formatFutureDay('2026-10-14', '2026-09-21')).toBe('14 октября')
+    expect(formatFutureDay('2027-01-05', '2026-09-21')).toBe('5 января 2027')
+    expect(formatFutureDay('2026-09-20', '2026-09-21')).toBe('Вчера')
   })
 })

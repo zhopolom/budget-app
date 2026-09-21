@@ -81,6 +81,24 @@ export function monthDateRange(ym: YearMonth): { start: IsoDate; end: IsoDate } 
   return { start: `${prefix}-01`, end: `${prefix}-${pad2(daysInMonth(ym))}` }
 }
 
+/** Понедельник первый — как в русском календаре, а не как в getDay(). */
+export const WEEKDAY_LABELS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс'] as const
+
+/** 0 — понедельник, 6 — воскресенье. */
+export function weekdayIndex(iso: IsoDate): number {
+  return (fromIsoDate(iso).getDay() + 6) % 7
+}
+
+export function isWeekend(iso: IsoDate): boolean {
+  return weekdayIndex(iso) >= 5
+}
+
+/** Все дни месяца строками 'yyyy-MM-dd'. */
+export function monthDays(ym: YearMonth): IsoDate[] {
+  const prefix = `${ym.year}-${pad2(ym.month)}`
+  return Array.from({ length: daysInMonth(ym) }, (_, index) => `${prefix}-${pad2(index + 1)}`)
+}
+
 const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
 
 /** «Сентябрь 2026» */

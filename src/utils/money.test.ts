@@ -50,3 +50,21 @@ describe('Money.sanitizeInput', () => {
     expect(Money.sanitizeInput(input)).toBe(expected)
   })
 })
+
+describe('Money.formatCompact', () => {
+  it('прячет копейки и символ валюты — сумма должна влезать в ячейку календаря', () => {
+    expect(Money.formatCompact(43_000)).toBe('430')
+    expect(Money.formatCompact(43_050)).toBe('431')
+    expect(Money.formatCompact(250_000)).toBe('2 500')
+  })
+
+  it('тысячи от десяти сокращает', () => {
+    expect(Money.formatCompact(1_000_000)).toBe('10к')
+    expect(Money.formatCompact(3_200_000)).toBe('32к')
+    expect(Money.formatCompact(150_000_000)).toBe('1 500к')
+  })
+
+  it('знак не показывает: направление задаёт сам экран', () => {
+    expect(Money.formatCompact(-43_000)).toBe('430')
+  })
+})

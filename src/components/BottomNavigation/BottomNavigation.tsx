@@ -12,7 +12,7 @@ interface NavItem {
 
 const LEFT: readonly NavItem[] = [
   { to: '/', label: 'Главная', icon: 'home' },
-  { to: '/transactions', label: 'Операции', icon: 'list' },
+  { to: '/transactions', label: 'Операции', icon: 'list', alsoActiveOn: ['/calendar'] },
 ]
 
 const RIGHT: readonly NavItem[] = [

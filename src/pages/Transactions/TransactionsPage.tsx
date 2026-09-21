@@ -6,6 +6,7 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { SearchField } from '../../components/SearchField/SearchField'
+import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
 import { TransactionItem } from '../../components/TransactionItem/TransactionItem'
 import {
   applyFilters,
@@ -22,6 +23,11 @@ import { Money } from '../../utils/money'
 import { FiltersSheet } from './FiltersSheet'
 import styles from './TransactionsPage.module.css'
 import { useTransactionsData } from './useTransactionsData'
+
+const VIEW_OPTIONS = [
+  { value: 'list', label: 'Список' },
+  { value: 'calendar', label: 'Календарь' },
+] as const
 
 // Вне компонента — стабильная ссылка, memo у TransactionItem не сбрасывается
 const openTransaction = (id: Id) => navigate(`/edit?id=${encodeURIComponent(id)}`)
@@ -48,6 +54,14 @@ export function TransactionsPage() {
   return (
     <div className={styles.page}>
       <PageHeader title="Операции" />
+
+      <SegmentedControl
+        options={VIEW_OPTIONS}
+        value="list"
+        onChange={(value) => value === 'calendar' && navigate('/calendar')}
+        label="Вид"
+      />
+
       {/* Период задаётся фильтрами, но месяц остаётся общим для всех экранов */}
       {filters.period === 'month' ? (
         <MonthSelector selection={selection} />
