@@ -13,6 +13,7 @@ import {
 } from '../../features/categories/validation'
 import { transactionsRepository } from '../../features/transactions/repository'
 import type { Category, CategoryType } from '../../types/entities'
+import { keepFocus } from '../../utils/keepFocus'
 import { pluralRu } from '../../utils/plural'
 import styles from './CategorySheet.module.css'
 
@@ -123,6 +124,7 @@ function CategoryForm({ category, type, existing, onDone }: CategoryFormProps) {
               aria-checked={choice === icon}
               aria-label={choice}
               className={styles.iconOption}
+              onMouseDown={keepFocus}
               onClick={() => {
                 setIcon(choice)
                 setCustomIcon('')

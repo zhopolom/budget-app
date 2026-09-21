@@ -23,7 +23,7 @@
 
 .sheet .panel {
   right: 0;
-  bottom: var(--keyboard-inset, 0px);
+  bottom: 0;
   left: 0;
   max-width: var(--content-max);
   max-height: calc(100dvh - env(safe-area-inset-top) - 24px - var(--keyboard-inset, 0px));
@@ -34,6 +34,16 @@
   border-radius: 28px 28px 0 0;
   overflow-y: auto;
   overscroll-behavior: contain;
+  /*
+   * Над клавиатурой шторка поднимается трансформом, а не смещением bottom:
+   * это не вызывает пересчёт раскладки на каждый кадр анимации клавиатуры.
+   * Переход сглаживает шаг между «клавиатура открыта» и «закрыта», чтобы
+   * шторка уезжала вниз одним движением, а не прыгала.
+   */
+  transform: translateY(calc(var(--keyboard-inset, 0px) * -1));
+  transition:
+    transform 0.22s var(--ease-out),
+    max-height 0.22s var(--ease-out);
   animation: slide-up 0.3s var(--ease-out);
 }
 

@@ -1,3 +1,4 @@
+import { keepFocus } from '../../utils/keepFocus'
 import styles from './SegmentedControl.module.css'
 
 interface Option<T extends string> {
@@ -22,6 +23,7 @@ export function SegmentedControl<T extends string>({ options, value, onChange, l
           role="radio"
           aria-checked={option.value === value}
           className={styles.option}
+          onMouseDown={keepFocus}
           onClick={() => onChange(option.value)}
         >
           {option.label}
