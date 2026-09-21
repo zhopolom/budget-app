@@ -1,0 +1,30 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  padding-left: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.note {
+  padding: 0 4px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.version {
+  font-size: 13px;
+  color: var(--ink-2);
+  text-align: center;
+}

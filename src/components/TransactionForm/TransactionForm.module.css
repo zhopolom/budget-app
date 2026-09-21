@@ -1,0 +1,53 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  /* Место под закреплённую кнопку сохранения */
+  padding-bottom: calc(88px + env(safe-area-inset-bottom));
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.error {
+  font-size: 14px;
+  color: var(--negative);
+}
+
+/* Над клавиатурой, когда она открыта; у нижнего края — когда закрыта */
+.submitBar {
+  position: fixed;
+  right: 0;
+  bottom: var(--keyboard-inset, 0px);
+  left: 0;
+  z-index: 5;
+  padding: 16px max(var(--page-x), env(safe-area-inset-right))
+    max(12px, calc(env(safe-area-inset-bottom) + 12px - var(--keyboard-inset, 0px)))
+    max(var(--page-x), env(safe-area-inset-left));
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+}
+
+.submitInner {
+  max-width: var(--content-max);
+  margin: 0 auto;
+}
+
+.submitInner > button {
+  min-height: 54px;
+  font-size: 17px;
+}

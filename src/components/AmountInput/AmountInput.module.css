@@ -1,0 +1,65 @@
+.wrapper {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 4px;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  max-width: 100%;
+  font-family: var(--font-num);
+  font-size: clamp(44px, 14vw, 60px);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  cursor: text;
+}
+
+.sign {
+  margin-right: 4px;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.sign[data-type='income'] {
+  color: var(--positive);
+}
+
+.input {
+  min-width: 1ch;
+  max-width: 11ch;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font: inherit;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: inherit;
+  text-align: center;
+  outline: none;
+  caret-color: var(--accent);
+}
+
+.input::placeholder {
+  color: var(--ink-2);
+  opacity: 0.45;
+}
+
+.currency {
+  margin-left: 8px;
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.row[data-invalid] .input::placeholder {
+  color: var(--negative);
+  opacity: 0.6;
+}
+
+.error {
+  font-size: 14px;
+  color: var(--negative);
+}

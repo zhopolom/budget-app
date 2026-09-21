@@ -1,0 +1,29 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.totalLabel {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.totalValue {
+  font-family: var(--font-num);
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  overflow-wrap: anywhere;
+}
+
+.totalValue[data-negative],
+.negative {
+  color: var(--negative);
+}

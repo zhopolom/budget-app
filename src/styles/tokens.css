@@ -1,0 +1,94 @@
+/*
+ * Токены дизайна. Светлая тема — в :root, тёмная — в двух местах:
+ * при системной тёмной теме и при явном выборе data-theme="dark".
+ * Цвета --bg продублированы в features/settings/theme.ts для meta theme-color.
+ */
+:root {
+  color-scheme: light;
+
+  --bg: #f4f2f8;
+  --surface: #ffffff;
+  --surface-2: #ebe8f2;
+  --ink: #1c1829;
+  --ink-2: #6b6580;
+  --line: rgba(28, 24, 41, 0.08);
+
+  --accent: #6a4df4;
+  --accent-ink: #ffffff;
+  --accent-text: #5a3be6;
+  --accent-soft: #ece8ff;
+  --accent-shadow: rgba(106, 77, 244, 0.45);
+
+  --positive: #16875a;
+  --warning: #c27a00;
+  --negative: #d93d4a;
+
+  --nav-bg: rgba(255, 255, 255, 0.82);
+  --segment-active: #ffffff;
+
+  --font-ui: -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI', Roboto, sans-serif;
+  /* SF Pro Rounded на iPhone/Mac — цифры выглядят мягче и «своими» */
+  --font-num: ui-rounded, 'SF Pro Rounded', -apple-system, BlinkMacSystemFont, system-ui, 'Segoe UI', Roboto, sans-serif;
+
+  --radius-lg: 24px;
+  --radius-md: 18px;
+  --radius-sm: 14px;
+
+  --page-x: 20px;
+  --content-max: 560px;
+  --nav-height: 64px;
+  /* Высота экранной клавиатуры, обновляется из useKeyboardInset */
+  --keyboard-inset: 0px;
+
+  --ease-out: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --bg: #121019;
+    --surface: #1c1926;
+    --surface-2: #28243a;
+    --ink: #f2f0f7;
+    --ink-2: #9d97ae;
+    --line: rgba(242, 240, 247, 0.08);
+
+    --accent: #7b5cff;
+    --accent-ink: #ffffff;
+    --accent-text: #b3a5ff;
+    --accent-soft: rgba(123, 92, 255, 0.18);
+    --accent-shadow: rgba(123, 92, 255, 0.5);
+
+    --positive: #3dd68c;
+    --warning: #f5b547;
+    --negative: #ff6b72;
+
+    --nav-bg: rgba(28, 25, 38, 0.82);
+    --segment-active: #3d3654;
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --bg: #121019;
+  --surface: #1c1926;
+  --surface-2: #28243a;
+  --ink: #f2f0f7;
+  --ink-2: #9d97ae;
+  --line: rgba(242, 240, 247, 0.08);
+
+  --accent: #7b5cff;
+  --accent-ink: #ffffff;
+  --accent-text: #b3a5ff;
+  --accent-soft: rgba(123, 92, 255, 0.18);
+  --accent-shadow: rgba(123, 92, 255, 0.5);
+
+  --positive: #3dd68c;
+  --warning: #f5b547;
+  --negative: #ff6b72;
+
+  --nav-bg: rgba(28, 25, 38, 0.82);
+  --segment-active: #3d3654;
+}

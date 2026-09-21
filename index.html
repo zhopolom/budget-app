@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="description" content="Личный учёт расходов. Данные хранятся только на устройстве." />
+
+    <meta name="theme-color" content="#F4F2F8" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#121019" media="(prefers-color-scheme: dark)" />
+
+    <!-- iOS: запуск с домашнего экрана как отдельное приложение -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Budget" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <!-- Не превращать суммы вроде «32 000» в ссылки для звонка -->
+    <meta name="format-detection" content="telephone=no" />
+
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <title>Budget</title>
+
+    <script>
+      // Применяем явно выбранную тему до отрисовки, чтобы не мигала светлая
+      try {
+        var theme = localStorage.getItem('budget:theme')
+        if (theme === 'light' || theme === 'dark') document.documentElement.dataset.theme = theme
+      } catch (e) {}
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

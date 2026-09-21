@@ -1,0 +1,68 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.percent {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.percent[data-tone='warning'] {
+  color: var(--warning);
+}
+
+.percent[data-tone='danger'] {
+  color: var(--negative);
+}
+
+.amounts {
+  font-family: var(--font-num);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.limit {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.footer {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.footer[data-tone='danger'] {
+  color: var(--negative);
+  font-weight: 500;
+}
+
+.hint {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.setup {
+  align-self: flex-start;
+}

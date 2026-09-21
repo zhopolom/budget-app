@@ -1,0 +1,66 @@
+.summary {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.label {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.value {
+  font-family: var(--font-num);
+  font-size: clamp(40px, 13vw, 56px);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  overflow-wrap: anywhere;
+}
+
+.value[data-negative] {
+  color: var(--negative);
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin: 0;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  padding: 14px 16px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.tileLabel {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.tileValue {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 20px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.income {
+  color: var(--positive);
+}

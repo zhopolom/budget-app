@@ -1,0 +1,48 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 16px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--accent-text);
+}
+
+.card {
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.list {
+  margin: 0;
+  padding: 4px 0;
+  list-style: none;
+}
+
+.row {
+  position: relative;
+}
+
+/* Разделитель начинается после иконки, как в системных списках iOS */
+.row + .row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 16px;
+  left: 72px;
+  height: 1px;
+  background: var(--line);
+}

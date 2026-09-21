@@ -1,0 +1,29 @@
+.group {
+  display: grid;
+  grid-auto-columns: 1fr;
+  grid-auto-flow: column;
+  gap: 2px;
+  padding: 3px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+
+.option {
+  min-height: 40px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 11px;
+  background: transparent;
+  color: var(--ink-2);
+  font-size: 15px;
+  font-weight: 600;
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.option[aria-checked='true'] {
+  background: var(--segment-active);
+  color: var(--ink);
+  box-shadow: 0 1px 3px rgba(20, 14, 40, 0.12);
+}

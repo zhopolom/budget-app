@@ -1,0 +1,86 @@
+import { format, getDaysInMonth } from 'date-fns'
+import { ru } from 'date-fns/locale'
+import type { IsoDate } from '../types/entities'
+
+export interface YearMonth {
+  year: number
+  /** 1–12 */
+  month: number
+}
+
+const pad2 = (value: number) => String(value).padStart(2, '0')
+
+export function toIsoDate(date: Date): IsoDate {
+  return format(date, 'yyyy-MM-dd')
+}
+
+/** Разбирает 'yyyy-MM-dd' как локальную дату (new Date('2026-09-21') дал бы UTC). */
+export function fromIsoDate(iso: IsoDate): Date {
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+/** Проверяет формат 'yyyy-MM-dd' и что такая дата существует (нет 31 февраля). */
+export function isValidIsoDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  return toIsoDate(fromIsoDate(value)) === value
+}
+
+export function toYearMonth(date: Date): YearMonth {
+  return { year: date.getFullYear(), month: date.getMonth() + 1 }
+}
+
+function firstDayOf({ year, month }: YearMonth): Date {
+  return new Date(year, month - 1, 1)
+}
+
+export function daysInMonth(ym: YearMonth): number {
+  return getDaysInMonth(firstDayOf(ym))
+}
+
+/** Границы месяца включительно — строки сравниваются лексикографически. */
+export function monthDateRange(ym: YearMonth): { start: IsoDate; end: IsoDate } {
+  const prefix = `${ym.year}-${pad2(ym.month)}`
+  return { start: `${prefix}-01`, end: `${prefix}-${pad2(daysInMonth(ym))}` }
+}
+
+const capitalize = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
+
+/** «Сентябрь 2026» */
+export function formatMonthTitle(ym: YearMonth): string {
+  return capitalize(format(firstDayOf(ym), 'LLLL yyyy', { locale: ru }))
+}
+
+/** «сентября» — для фраз вида «Бюджет сентября». */
+export function formatMonthGenitive(ym: YearMonth): string {
+  return format(firstDayOf(ym), 'MMMM', { locale: ru })
+}
+
+function dayDiff(iso: IsoDate, today: IsoDate): number {
+  const msPerDay = 86_400_000
+  // Через UTC, чтобы переход на летнее время не давал 23/25 часов
+  const toUtc = (value: IsoDate) => {
+    const [y, m, d] = value.split('-').map(Number)
+    return Date.UTC(y, m - 1, d)
+  }
+  return Math.round((toUtc(today) - toUtc(iso)) / msPerDay)
+}
+
+/** «Сегодня», «Вчера», «20 сентября», «20 сентября 2025». */
+export function formatDayLabel(iso: IsoDate, today: IsoDate): string {
+  const diff = dayDiff(iso, today)
+  if (diff === 0) return 'Сегодня'
+  if (diff === 1) return 'Вчера'
+  const date = fromIsoDate(iso)
+  const sameYear = iso.slice(0, 4) === today.slice(0, 4)
+  return format(date, sameYear ? 'd MMMM' : 'd MMMM yyyy', { locale: ru })
+}
+
+/** Короткий вариант для строк списка: «Сегодня», «Вчера», «20 сент.». */
+export function formatDayShort(iso: IsoDate, today: IsoDate): string {
+  const diff = dayDiff(iso, today)
+  if (diff === 0) return 'Сегодня'
+  if (diff === 1) return 'Вчера'
+  const sameYear = iso.slice(0, 4) === today.slice(0, 4)
+  return format(fromIsoDate(iso), sameYear ? 'd MMM' : 'd MMM yyyy', { locale: ru })
+}
