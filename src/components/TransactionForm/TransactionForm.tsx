@@ -1,12 +1,13 @@
 import { useMemo, useState, type FormEvent } from 'react'
 import { ACCOUNT_TYPE_ICONS } from '../../features/accounts/labels'
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
+import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
+import type { TransactionInput } from '../../features/transactions/model'
 import type { TransactionEditorData } from '../../features/transactions/useTransactionEditorData'
 import {
   NOTE_MAX_LENGTH,
   validateTransactionDraft,
   type TransactionDraft,
-  type TransactionInput,
 } from '../../features/transactions/validation'
 import type { Id, TransactionType } from '../../types/entities'
 import { toIsoDate } from '../../utils/dates'
@@ -20,20 +21,36 @@ import { useToast } from '../Toast/toastContext'
 import styles from './TransactionForm.module.css'
 
 const TYPE_OPTIONS = [
-  { value: 'expense', label: 'Расход' },
-  { value: 'income', label: 'Доход' },
+  { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
+  { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
+  { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
 ] as const satisfies readonly { value: TransactionType; label: string }[]
 
 interface TransactionFormProps {
   initial: TransactionDraft
   data: TransactionEditorData
-  submitLabel: string
+  mode: 'create' | 'edit'
   autoFocusAmount?: boolean
   onSubmit: (input: TransactionInput) => Promise<void>
+  /** «Повторить»: открывает новую форму с теми же данными и сегодняшней датой. */
+  onDuplicate?: () => void
   onDelete?: () => void
 }
 
-export function TransactionForm({ initial, data, submitLabel, autoFocusAmount = false, onSubmit, onDelete }: TransactionFormProps) {
+function submitLabelFor(mode: 'create' | 'edit', type: TransactionType): string {
+  if (mode === 'edit') return 'Сохранить'
+  return type === 'transfer' ? 'Перевести' : 'Добавить'
+}
+
+export function TransactionForm({
+  initial,
+  data,
+  mode,
+  autoFocusAmount = false,
+  onSubmit,
+  onDuplicate,
+  onDelete,
+}: TransactionFormProps) {
   const [draft, setDraft] = useState(initial)
   const [attempted, setAttempted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
@@ -41,9 +58,11 @@ export function TransactionForm({ initial, data, submitLabel, autoFocusAmount = 
   const [usage] = useState(data.categoryUsage)
   const toast = useToast()
 
+  const isTransfer = draft.type === 'transfer'
+
   const categories = useMemo(
-    () => sortCategoriesByUsage(data.categories.filter((category) => category.type === draft.type), usage),
-    [data.categories, usage, draft.type],
+    () => (isTransfer ? [] : sortCategoriesByUsage(data.categories.filter((category) => category.type === draft.type), usage)),
+    [data.categories, usage, draft.type, isTransfer],
   )
 
   const accountChips = useMemo(
@@ -58,8 +77,17 @@ export function TransactionForm({ initial, data, submitLabel, autoFocusAmount = 
   const update = (patch: Partial<TransactionDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
   const changeType = (type: TransactionType) => {
+    if (type === 'transfer') {
+      // Счёт, который пользователь уже выбрал, становится счётом-источником
+      update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })
+      return
+    }
     const keepsCategory = data.categories.some((category) => category.id === draft.categoryId && category.type === type)
-    update({ type, categoryId: keepsCategory ? draft.categoryId : null })
+    update({
+      type,
+      categoryId: keepsCategory ? draft.categoryId : null,
+      accountId: draft.accountId ?? draft.fromAccountId,
+    })
   }
 
   const selectCategory = (categoryId: Id) => {
@@ -97,22 +125,52 @@ export function TransactionForm({ initial, data, submitLabel, autoFocusAmount = 
         error={errors.amount}
       />
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Категория</h2>
-        <CategoryPicker categories={categories} value={draft.categoryId} onChange={selectCategory} error={errors.category} />
-      </section>
+      {isTransfer ? (
+        <>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Откуда</h2>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.fromAccountId}
+              onChange={(fromAccountId) => update({ fromAccountId })}
+              label="Счёт списания"
+              layout="scroll"
+            />
+            {errors.fromAccount && <p className={styles.error}>{errors.fromAccount}</p>}
+          </section>
 
-      <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Счёт</h2>
-        <ChipGroup
-          chips={accountChips}
-          value={draft.accountId}
-          onChange={(accountId) => update({ accountId })}
-          label="Счёт"
-          layout="scroll"
-        />
-        {errors.account && <p className={styles.error}>{errors.account}</p>}
-      </section>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Куда</h2>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.toAccountId}
+              onChange={(toAccountId) => update({ toAccountId })}
+              label="Счёт зачисления"
+              layout="scroll"
+            />
+            {errors.toAccount && <p className={styles.error}>{errors.toAccount}</p>}
+          </section>
+        </>
+      ) : (
+        <>
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Категория</h2>
+            <CategoryPicker categories={categories} value={draft.categoryId} onChange={selectCategory} error={errors.category} />
+          </section>
+
+          <section className={styles.section}>
+            <h2 className={styles.sectionTitle}>Счёт</h2>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.accountId}
+              onChange={(accountId) => update({ accountId })}
+              label="Счёт"
+              layout="scroll"
+            />
+            {errors.account && <p className={styles.error}>{errors.account}</p>}
+          </section>
+        </>
+      )}
 
       <div className={styles.fields}>
         <TextField
@@ -135,16 +193,25 @@ export function TransactionForm({ initial, data, submitLabel, autoFocusAmount = 
         />
       </div>
 
-      {onDelete && (
-        <Button variant="danger" block onClick={onDelete} disabled={submitting}>
-          Удалить операцию
-        </Button>
+      {(onDuplicate || onDelete) && (
+        <div className={styles.actions}>
+          {onDuplicate && (
+            <Button variant="secondary" block onClick={onDuplicate} disabled={submitting}>
+              Повторить операцию
+            </Button>
+          )}
+          {onDelete && (
+            <Button variant="danger" block onClick={onDelete} disabled={submitting}>
+              Удалить операцию
+            </Button>
+          )}
+        </div>
       )}
 
       <div className={styles.submitBar}>
         <div className={styles.submitInner}>
           <Button type="submit" block disabled={submitting}>
-            {submitLabel}
+            {submitLabelFor(mode, draft.type)}
           </Button>
         </div>
       </div>

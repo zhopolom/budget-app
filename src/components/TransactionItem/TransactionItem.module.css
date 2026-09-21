@@ -73,6 +73,11 @@
   color: var(--positive);
 }
 
+/* Перевод не меняет капитал — показываем его приглушённо */
+.amount[data-type='transfer'] {
+  color: var(--ink-2);
+}
+
 .date {
   font-size: 13px;
   color: var(--ink-2);

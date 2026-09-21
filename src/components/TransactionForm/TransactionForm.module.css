@@ -29,6 +29,12 @@
   color: var(--negative);
 }
 
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
 /* Над клавиатурой, когда она открыта; у нижнего края — когда закрыта */
 .submitBar {
   position: fixed;

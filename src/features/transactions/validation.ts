@@ -2,23 +2,29 @@ import type { Account, Category, Id, IsoDate, Transaction, TransactionType } fro
 import type { ValidationResult } from '../../types/validation'
 import { isValidIsoDate } from '../../utils/dates'
 import { Money, PARSE_ERROR_MESSAGES } from '../../utils/money'
+import { isTransfer, type TransactionInput } from './model'
 
 export const NOTE_MAX_LENGTH = 120
 
-/** Данные операции без служебных полей — то, что создаёт или меняет пользователь. */
-export type TransactionInput = Omit<Transaction, 'id' | 'createdAt' | 'updatedAt'>
+export type { TransactionInput }
 
-/** Состояние формы: сумма — ещё текст, категория и счёт могут быть не выбраны. */
+/**
+ * Состояние формы: сумма — ещё текст, счета и категория могут быть не выбраны.
+ * Поля всех трёх типов держим рядом, чтобы переключение «Расход / Доход / Перевод»
+ * не стирало уже введённое.
+ */
 export interface TransactionDraft {
   type: TransactionType
   amountText: string
   categoryId: Id | null
   accountId: Id | null
+  fromAccountId: Id | null
+  toAccountId: Id | null
   date: IsoDate
   note: string
 }
 
-export type TransactionField = 'amount' | 'category' | 'account' | 'date' | 'note'
+export type TransactionField = 'amount' | 'category' | 'account' | 'fromAccount' | 'toAccount' | 'date' | 'note'
 
 interface ValidationContext {
   categories: readonly Category[]
@@ -35,40 +41,75 @@ export function validateTransactionDraft(
   if (!parsed.ok) errors.amount = PARSE_ERROR_MESSAGES[parsed.error]
   else if (parsed.value === 0) errors.amount = PARSE_ERROR_MESSAGES.empty
 
-  const category = categories.find((item) => item.id === draft.categoryId)
-  if (!category || category.type !== draft.type) errors.category = 'Выберите категорию'
-
-  if (!accounts.some((account) => account.id === draft.accountId)) errors.account = 'Выберите счёт'
-
   if (!isValidIsoDate(draft.date)) errors.date = 'Укажите дату'
 
   const note = draft.note.trim()
   if (note.length > NOTE_MAX_LENGTH) errors.note = `Не длиннее ${NOTE_MAX_LENGTH} символов`
 
-  if (Object.keys(errors).length > 0 || !parsed.ok || !category || !draft.accountId) {
-    return { ok: false, errors }
+  const common = { amount: parsed.ok ? parsed.value : 0, date: draft.date, note }
+  const failed = (): ValidationResult<TransactionInput, TransactionField> => ({ ok: false, errors })
+
+  if (draft.type === 'transfer') {
+    const from = accounts.find((account) => account.id === draft.fromAccountId)
+    const to = accounts.find((account) => account.id === draft.toAccountId)
+
+    if (!from) errors.fromAccount = 'Выберите счёт'
+    if (!to) errors.toAccount = 'Выберите счёт'
+    if (from && to && from.id === to.id) errors.toAccount = 'Выберите другой счёт'
+    if (from && to && from.currency !== to.currency) errors.toAccount = 'Счета в разных валютах'
+
+    if (Object.keys(errors).length > 0 || !parsed.ok || !from || !to) return failed()
+    return { ok: true, value: { type: 'transfer', fromAccountId: from.id, toAccountId: to.id, ...common } }
   }
 
-  return {
-    ok: true,
-    value: {
-      type: draft.type,
-      amount: parsed.value,
-      categoryId: category.id,
-      accountId: draft.accountId,
-      date: draft.date,
-      note,
-    },
-  }
+  const category = categories.find((item) => item.id === draft.categoryId)
+  if (!category || category.type !== draft.type) errors.category = 'Выберите категорию'
+
+  const account = accounts.find((item) => item.id === draft.accountId)
+  if (!account) errors.account = 'Выберите счёт'
+
+  if (Object.keys(errors).length > 0 || !parsed.ok || !category || !account) return failed()
+  return { ok: true, value: { type: draft.type, categoryId: category.id, accountId: account.id, ...common } }
 }
 
 export function draftFromTransaction(transaction: Transaction): TransactionDraft {
-  return {
-    type: transaction.type,
+  const common = {
     amountText: Money.toInputString(transaction.amount),
-    categoryId: transaction.categoryId,
-    accountId: transaction.accountId,
     date: transaction.date,
     note: transaction.note,
+  }
+
+  if (isTransfer(transaction)) {
+    return {
+      type: 'transfer',
+      categoryId: null,
+      accountId: null,
+      fromAccountId: transaction.fromAccountId,
+      toAccountId: transaction.toAccountId,
+      ...common,
+    }
+  }
+
+  return {
+    type: transaction.type,
+    categoryId: transaction.categoryId,
+    accountId: transaction.accountId,
+    fromAccountId: null,
+    toAccountId: null,
+    ...common,
+  }
+}
+
+/** Пустая форма: счёт по умолчанию и сегодняшняя дата. */
+export function emptyDraft(accountId: Id | null, date: IsoDate): TransactionDraft {
+  return {
+    type: 'expense',
+    amountText: '',
+    categoryId: null,
+    accountId,
+    fromAccountId: accountId,
+    toAccountId: null,
+    date,
+    note: '',
   }
 }

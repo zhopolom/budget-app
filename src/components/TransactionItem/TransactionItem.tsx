@@ -1,6 +1,6 @@
 import { memo } from 'react'
-import { MISSING_CATEGORY } from '../../features/categories/defaults'
-import { signedAmount } from '../../features/transactions/calculations'
+import { transactionIcon, transactionTitle } from '../../features/transactions/labels'
+import { isTransfer } from '../../features/transactions/model'
 import type { TransactionView } from '../../features/transactions/views'
 import type { CurrencyCode, Id } from '../../types/entities'
 import { Money } from '../../utils/money'
@@ -15,23 +15,28 @@ interface TransactionItemProps {
 }
 
 export const TransactionItem = memo(function TransactionItem({ view, currency, dayLabel, onSelect }: TransactionItemProps) {
-  const { transaction, category } = view
-  const icon = category?.icon ?? MISSING_CATEGORY.icon
-  const name = category?.name ?? MISSING_CATEGORY.name
+  const { transaction } = view
   const note = transaction.note.trim()
+
+  // У перевода знака нет: деньги не ушли и не пришли, а переложены между счетами
+  const amount = isTransfer(transaction)
+    ? Money.format(transaction.amount, currency)
+    : Money.format(transaction.type === 'expense' ? -transaction.amount : transaction.amount, currency, {
+        sign: 'always',
+      })
 
   const content = (
     <>
       <span className={styles.icon} aria-hidden="true">
-        {icon}
+        {transactionIcon(view)}
       </span>
       <div className={styles.main}>
-        <span className={styles.name}>{name}</span>
+        <span className={styles.name}>{transactionTitle(view)}</span>
         {note && <span className={styles.note}>{note}</span>}
       </div>
       <div className={styles.side}>
         <span className={styles.amount} data-type={transaction.type}>
-          {Money.format(signedAmount(transaction), currency, { sign: 'always' })}
+          {amount}
         </span>
         <span className={styles.date}>{dayLabel}</span>
       </div>
