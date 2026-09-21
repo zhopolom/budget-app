@@ -292,6 +292,184 @@ describe('импорт копии v0.1', () => {
   })
 })
 
+describe('регулярные переводы в копии', () => {
+  it('переживают круг «копия → разбор → восстановление»', async () => {
+    const rule = await recurringRepository.create(
+      {
+        type: 'transfer',
+        amount: Money.fromMajor(2_000),
+        fromAccountId: card,
+        toAccountId: cash,
+        note: 'На накопительный',
+        frequency: 'monthly',
+        interval: 1,
+        startDate: '2026-09-14',
+        isActive: true,
+      },
+      '2026-09-14',
+    )
+
+    const backup = await createBackup(new Date(2026, 8, 21), '0.3.0')
+    expect(backup.schemaVersion).toBe(3)
+
+    const parsed = parseBackup(serializeBackup(backup))
+    expect(parsed.ok).toBe(true)
+    if (!parsed.ok) return
+    expect(parsed.danglingReferences).toBe(0)
+
+    await restoreBackup(parsed.data)
+
+    const restored = await db.recurringTransactions.get(rule.id)
+    expect(restored).toMatchObject({
+      type: 'transfer',
+      fromAccountId: card,
+      toAccountId: cash,
+      amount: Money.fromMajor(2_000),
+      isActive: true,
+    })
+  })
+
+  it('не принимают правило без второй стороны', () => {
+    const broken = {
+      accounts: ACCOUNTS,
+      categories: CATEGORIES,
+      transactions: [],
+      recurringTransactions: [
+        {
+          id: 'r',
+          type: 'transfer',
+          amount: 100,
+          fromAccountId: 'card',
+          frequency: 'monthly',
+          interval: 1,
+          startDate: '2026-09-14',
+          nextOccurrence: '2026-10-14',
+          isActive: true,
+        },
+      ],
+      settings: { id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: 'card' },
+    }
+    const result = parseBackup(
+      JSON.stringify({ app: 'budget', schemaVersion: 3, exportDate: '2026-09-21T00:00:00.000Z', data: broken }),
+    )
+    expect(result.ok === false && result.error).toBe('Запись 1 в разделе «регулярные операции» повреждена')
+  })
+
+  it('битая ссылка на счёт у правила считается, но копию не отклоняет', () => {
+    const dangling = {
+      accounts: ACCOUNTS,
+      categories: CATEGORIES,
+      transactions: [],
+      recurringTransactions: [
+        {
+          id: 'r',
+          type: 'transfer',
+          amount: 100,
+          fromAccountId: 'card',
+          toAccountId: 'ghost',
+          frequency: 'monthly',
+          interval: 1,
+          startDate: '2026-09-14',
+          nextOccurrence: '2026-10-14',
+          isActive: true,
+        },
+      ],
+      settings: { id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: 'card' },
+    }
+    const result = parseBackup(
+      JSON.stringify({ app: 'budget', schemaVersion: 3, exportDate: '2026-09-21T00:00:00.000Z', data: dangling }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.danglingReferences).toBe(1)
+  })
+})
+
+describe('импорт копии v0.2', () => {
+  /** Копия v0.2: переводов между счетами в расписаниях тогда не было. */
+  const legacy = JSON.stringify({
+    app: 'budget',
+    schemaVersion: 2,
+    exportDate: '2026-09-01T00:00:00.000Z',
+    appVersion: '0.2.0',
+    data: {
+      accounts: ACCOUNTS,
+      categories: CATEGORIES,
+      transactions: [
+        {
+          id: 't1',
+          type: 'expense',
+          amount: 43_000,
+          categoryId: 'groceries',
+          accountId: 'card',
+          date: '2026-08-14',
+          note: 'АТБ',
+          createdAt: 100,
+          updatedAt: 100,
+        },
+      ],
+      budgets: [],
+      categoryBudgets: [],
+      recurringTransactions: [
+        {
+          id: 'r1',
+          type: 'expense',
+          amount: 19_900,
+          categoryId: 'groceries',
+          accountId: 'card',
+          note: 'Spotify',
+          frequency: 'monthly',
+          interval: 1,
+          startDate: '2026-08-14',
+          nextOccurrence: '2026-09-14',
+          isActive: true,
+          createdAt: 100,
+          updatedAt: 100,
+        },
+      ],
+      settings: { id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: 'card' },
+    },
+  })
+
+  it('читается без изменений — новых обязательных полей v3 не добавила', () => {
+    const result = parseBackup(legacy)
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.schemaVersion).toBe(2)
+    expect(result.data.recurringTransactions).toEqual([
+      {
+        id: 'r1',
+        type: 'expense',
+        amount: 19_900,
+        categoryId: 'groceries',
+        accountId: 'card',
+        note: 'Spotify',
+        frequency: 'monthly',
+        interval: 1,
+        startDate: '2026-08-14',
+        nextOccurrence: '2026-09-14',
+        isActive: true,
+        createdAt: 100,
+        updatedAt: 100,
+      },
+    ])
+  })
+
+  it('восстанавливается в базу v3 без потерь', async () => {
+    const result = parseBackup(legacy)
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+
+    await restoreBackup(result.data)
+
+    expect(await db.transactions.count()).toBe(1)
+    expect(await db.recurringTransactions.count()).toBe(1)
+    const rule = await db.recurringTransactions.get('r1')
+    expect(rule && 'accountId' in rule && rule.accountId).toBe('card')
+    expect(rule?.isActive).toBe(true)
+  })
+})
+
 describe('CSV', () => {
   it('экранирует запятые, кавычки и переносы строк', () => {
     expect(escapeCsvField('АТБ')).toBe('АТБ')
