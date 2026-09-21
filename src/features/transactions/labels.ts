@@ -24,6 +24,11 @@ export function transactionIcon(view: TransactionView): string {
 /** Заголовок строки: название категории, у перевода — «Карта → Наличные». */
 export function transactionTitle(view: TransactionView): string {
   if (isTransfer(view.transaction)) {
+    // Счета могли свести в один при удалении — тогда «Карта → Карта» выглядит
+    // как ошибка, хотя перевод настоящий и когда-то был между двумя счетами
+    if (view.transaction.fromAccountId === view.transaction.toAccountId) {
+      return `Перевод внутри счёта · ${view.fromAccount?.name ?? MISSING_ACCOUNT}`
+    }
     return `${view.fromAccount?.name ?? MISSING_ACCOUNT} → ${view.toAccount?.name ?? MISSING_ACCOUNT}`
   }
   return view.category?.name ?? MISSING_CATEGORY.name
