@@ -30,6 +30,38 @@ export function toYearMonth(date: Date): YearMonth {
   return { year: date.getFullYear(), month: date.getMonth() + 1 }
 }
 
+/** Месяц операции без разбора даты: '2026-09-21' → { year: 2026, month: 9 }. */
+export function yearMonthOf(iso: IsoDate): YearMonth {
+  return { year: Number(iso.slice(0, 4)), month: Number(iso.slice(5, 7)) }
+}
+
+/** '2026-09' — стабильный ключ месяца для Map, сортировки и хранения выбора. */
+export function monthKey({ year, month }: YearMonth): string {
+  return `${year}-${pad2(month)}`
+}
+
+export function fromMonthKey(key: string): YearMonth {
+  return { year: Number(key.slice(0, 4)), month: Number(key.slice(5, 7)) }
+}
+
+/** Сдвиг на N месяцев в любую сторону; год пересчитывается сам. */
+export function shiftMonth({ year, month }: YearMonth, delta: number): YearMonth {
+  const zeroBased = year * 12 + (month - 1) + delta
+  return { year: Math.floor(zeroBased / 12), month: (zeroBased % 12) + 1 }
+}
+
+export function previousMonth(ym: YearMonth): YearMonth {
+  return shiftMonth(ym, -1)
+}
+
+export function isSameYearMonth(a: YearMonth, b: YearMonth): boolean {
+  return a.year === b.year && a.month === b.month
+}
+
+export function compareYearMonth(a: YearMonth, b: YearMonth): number {
+  return a.year - b.year || a.month - b.month
+}
+
 function firstDayOf({ year, month }: YearMonth): Date {
   return new Date(year, month - 1, 1)
 }

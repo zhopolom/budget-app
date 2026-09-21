@@ -1,4 +1,4 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { navigate } from '../../app/navigation'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
@@ -6,6 +6,8 @@ import { SegmentedControl } from '../../components/SegmentedControl/SegmentedCon
 import { settingsRepository } from '../../features/settings/repository'
 import { useSettings } from '../../features/settings/useSettings'
 import type { ThemePreference } from '../../types/entities'
+import { Money } from '../../utils/money'
+import { CurrencySheet } from './CurrencySheet'
 import styles from './SettingsPage.module.css'
 
 // В production-сборку не попадает: import.meta.env.DEV заменяется на false
@@ -19,22 +21,38 @@ const THEME_OPTIONS = [
 
 export function SettingsPage() {
   const settings = useSettings()
+  const [currencyOpen, setCurrencyOpen] = useState(false)
+  const currency = settings?.baseCurrency ?? 'UAH'
 
   return (
     <div className={styles.page}>
       <PageHeader title="Настройки" />
 
-      <ListCard label="Данные">
-        <ListItem>
-          <ListRow icon="💳" title="Счета" chevron onClick={() => navigate('/accounts')} />
-        </ListItem>
-        <ListItem>
-          <ListRow icon="🏷️" title="Категории" chevron onClick={() => navigate('/categories')} />
-        </ListItem>
-      </ListCard>
+      <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Финансы</h2>
+        <ListCard label="Финансы">
+          <ListItem>
+            <ListRow
+              icon="💱"
+              title="Валюта"
+              value={`${Money.currencySymbol(currency)} ${currency}`}
+              onClick={() => setCurrencyOpen(true)}
+            />
+          </ListItem>
+          <ListItem>
+            <ListRow icon="🎯" title="Бюджет и лимиты" chevron onClick={() => navigate('/budgets')} />
+          </ListItem>
+          <ListItem>
+            <ListRow icon="💳" title="Счета" chevron onClick={() => navigate('/accounts')} />
+          </ListItem>
+          <ListItem>
+            <ListRow icon="🏷️" title="Категории" chevron onClick={() => navigate('/categories')} />
+          </ListItem>
+        </ListCard>
+      </section>
 
       <section className={styles.section}>
-        <h2 className={styles.sectionTitle}>Тема</h2>
+        <h2 className={styles.sectionTitle}>Интерфейс</h2>
         <SegmentedControl
           options={THEME_OPTIONS}
           value={settings?.theme ?? 'system'}
@@ -51,7 +69,9 @@ export function SettingsPage() {
         </Suspense>
       )}
 
-      <p className={styles.version}>Версия {__APP_VERSION__}</p>
+      <p className={styles.version}>Budget {__APP_VERSION__}</p>
+
+      <CurrencySheet open={currencyOpen} value={currency} onClose={() => setCurrencyOpen(false)} />
     </div>
   )
 }

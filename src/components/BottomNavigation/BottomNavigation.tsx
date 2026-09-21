@@ -17,7 +17,7 @@ const LEFT: readonly NavItem[] = [
 
 const RIGHT: readonly NavItem[] = [
   { to: '/analytics', label: 'Статистика', icon: 'chart' },
-  { to: '/settings', label: 'Настройки', icon: 'settings', alsoActiveOn: ['/accounts', '/categories'] },
+  { to: '/settings', label: 'Настройки', icon: 'settings', alsoActiveOn: ['/accounts', '/categories', '/budgets'] },
 ]
 
 function Item({ to, label, icon, alsoActiveOn }: NavItem) {

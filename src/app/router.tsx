@@ -2,6 +2,7 @@ import { useEffect, type ComponentType } from 'react'
 import { AccountsPage } from '../pages/Accounts/AccountsPage'
 import { AddTransactionPage } from '../pages/AddTransaction/AddTransactionPage'
 import { AnalyticsPage } from '../pages/Analytics/AnalyticsPage'
+import { BudgetsPage } from '../pages/Budgets/BudgetsPage'
 import { CategoriesPage } from '../pages/Categories/CategoriesPage'
 import { DashboardPage } from '../pages/Dashboard/DashboardPage'
 import { EditTransactionPage } from '../pages/EditTransaction/EditTransactionPage'
@@ -18,6 +19,7 @@ const TAB_ROUTES: Record<string, ComponentType> = {
   '/settings': SettingsPage,
   '/accounts': AccountsPage,
   '/categories': CategoriesPage,
+  '/budgets': BudgetsPage,
 }
 
 /** Полноэкранные экраны без нижней навигации. */
