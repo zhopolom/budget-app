@@ -1,4 +1,4 @@
-import { format, getDaysInMonth } from 'date-fns'
+import { addDays, format, getDaysInMonth } from 'date-fns'
 import { ru } from 'date-fns/locale'
 import type { IsoDate } from '../types/entities'
 
@@ -24,6 +24,11 @@ export function fromIsoDate(iso: IsoDate): Date {
 export function isValidIsoDate(value: string): boolean {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
   return toIsoDate(fromIsoDate(value)) === value
+}
+
+/** Сдвиг календарной даты без разбора часовых поясов. */
+export function addDaysIso(iso: IsoDate, days: number): IsoDate {
+  return toIsoDate(addDays(fromIsoDate(iso), days))
 }
 
 export function toYearMonth(date: Date): YearMonth {
@@ -106,6 +111,16 @@ export function formatDayLabel(iso: IsoDate, today: IsoDate): string {
   const date = fromIsoDate(iso)
   const sameYear = iso.slice(0, 4) === today.slice(0, 4)
   return format(date, sameYear ? 'd MMMM' : 'd MMMM yyyy', { locale: ru })
+}
+
+/** Для дат в будущем: «Сегодня», «Завтра», «14 октября», «14 октября 2027». */
+export function formatFutureDay(iso: IsoDate, today: IsoDate): string {
+  const diff = dayDiff(iso, today)
+  if (diff === 0) return 'Сегодня'
+  if (diff === -1) return 'Завтра'
+  if (diff > 0) return formatDayLabel(iso, today)
+  const sameYear = iso.slice(0, 4) === today.slice(0, 4)
+  return format(fromIsoDate(iso), sameYear ? 'd MMMM' : 'd MMMM yyyy', { locale: ru })
 }
 
 /** Короткий вариант для строк списка: «Сегодня», «Вчера», «20 сент.». */

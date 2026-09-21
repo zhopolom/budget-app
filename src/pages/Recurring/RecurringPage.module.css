@@ -1,0 +1,34 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note {
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.card {
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.amount {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+}
+
+.amount[data-type='income'] {
+  color: var(--positive);
+}
+
+/* Отключённое расписание не должно выглядеть как действующее */
+.amount[data-off] {
+  color: var(--ink-2);
+  text-decoration: line-through;
+}

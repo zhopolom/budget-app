@@ -52,6 +52,15 @@ export function SettingsPage() {
       </section>
 
       <section className={styles.section}>
+        <h2 className={styles.sectionTitle}>Автоматизация</h2>
+        <ListCard label="Автоматизация">
+          <ListItem>
+            <ListRow icon="🔁" title="Регулярные операции" chevron onClick={() => navigate('/recurring')} />
+          </ListItem>
+        </ListCard>
+      </section>
+
+      <section className={styles.section}>
         <h2 className={styles.sectionTitle}>Интерфейс</h2>
         <SegmentedControl
           options={THEME_OPTIONS}
