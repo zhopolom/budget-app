@@ -6,6 +6,7 @@ import { useSettings } from '../features/settings/useSettings'
 import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import { useToday } from '../hooks/useToday'
 import { AppRouter } from './router'
+import { UpdatePrompt } from './UpdatePrompt'
 
 export function App() {
   const settings = useSettings()
@@ -17,6 +18,7 @@ export function App() {
       <ConfirmProvider>
         <RecurringRunner />
         <AppRouter />
+        <UpdatePrompt />
       </ConfirmProvider>
     </ToastProvider>
   )
