@@ -1,4 +1,5 @@
 import { useEffect, type ComponentType } from 'react'
+import { AccountPage } from '../pages/Accounts/AccountPage'
 import { AccountsPage } from '../pages/Accounts/AccountsPage'
 import { AddTransactionPage } from '../pages/AddTransaction/AddTransactionPage'
 import { AnalyticsPage } from '../pages/Analytics/AnalyticsPage'
@@ -21,6 +22,7 @@ const TAB_ROUTES: Record<string, ComponentType> = {
   '/analytics': AnalyticsPage,
   '/settings': SettingsPage,
   '/accounts': AccountsPage,
+  '/account': AccountPage,
   '/categories': CategoriesPage,
   '/budgets': BudgetsPage,
   '/recurring': RecurringPage,

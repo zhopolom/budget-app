@@ -1,0 +1,125 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 22px 20px 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  text-align: center;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 8px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  font-size: 26px;
+  line-height: 1;
+}
+
+.type {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.balance {
+  font-family: var(--font-num);
+  font-size: 32px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.balance[data-negative] {
+  color: var(--negative);
+}
+
+.count {
+  margin-top: 2px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.edit {
+  margin-top: 14px;
+}
+
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.tileLabel {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+
+.tileValue {
+  font-family: var(--font-num);
+  font-size: 17px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
+.tileValue[data-tone='positive'] {
+  color: var(--positive);
+}
+
+/* Нули не должны перетягивать внимание с настоящих оборотов */
+.tileValue[data-zero] {
+  color: var(--ink-2);
+  font-weight: 600;
+}
+
+.card {
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.day {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.dayTitle {
+  padding: 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  list-style: none;
+  overflow: hidden;
+}
+
+.list > li + li {
+  border-top: 1px solid var(--line);
+}
