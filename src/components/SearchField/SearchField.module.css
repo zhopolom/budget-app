@@ -17,6 +17,8 @@
 
 .input {
   flex: 1;
+  /* Растягиваем на всю высоту: иначе тап мимо текста не ставит фокус */
+  align-self: stretch;
   min-width: 0;
   border: 0;
   background: transparent;

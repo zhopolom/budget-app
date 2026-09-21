@@ -6,13 +6,13 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { Sheet } from '../../components/Sheet/Sheet'
-import { TransactionItem } from '../../components/TransactionItem/TransactionItem'
+import { TransactionRow } from '../../components/TransactionItem/TransactionRow'
 import { transferCandidates } from '../../features/accounts/deletion'
 import { ACCOUNT_TYPE_ICONS, ACCOUNT_TYPE_LABELS } from '../../features/accounts/labels'
 import { useAccountsOverview } from '../../features/accounts/useAccountsOverview'
 import { groupByDay } from '../../features/transactions/grouping'
 import { useToday } from '../../hooks/useToday'
-import type { Id, MinorUnits } from '../../types/entities'
+import type { MinorUnits } from '../../types/entities'
 import { formatDayLabel, formatMonthGenitive } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
@@ -20,8 +20,6 @@ import { AccountForm } from './AccountForm'
 import styles from './AccountPage.module.css'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
 import { useAccountData } from './useAccountData'
-
-const openTransaction = (id: Id) => navigate(`/edit?id=${encodeURIComponent(id)}`)
 
 type SheetMode = 'closed' | 'edit' | 'create' | 'delete'
 
@@ -96,7 +94,7 @@ export function AccountPage() {
                 <ul className={styles.list}>
                   {group.items.map((view) => (
                     <li key={view.transaction.id}>
-                      <TransactionItem view={view} currency={data.currency} onSelect={openTransaction} />
+                      <TransactionRow view={view} currency={data.currency} />
                     </li>
                   ))}
                 </ul>

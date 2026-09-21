@@ -5,10 +5,10 @@ import { EmptyState } from '../../components/EmptyState/EmptyState'
 import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
-import { TransactionItem } from '../../components/TransactionItem/TransactionItem'
+import { TransactionRow } from '../../components/TransactionItem/TransactionRow'
 import { groupByDay } from '../../features/transactions/grouping'
 import { useToday } from '../../hooks/useToday'
-import type { Id, IsoDate } from '../../types/entities'
+import type { IsoDate } from '../../types/entities'
 import { formatDayLabel, isSameYearMonth, yearMonthOf } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
@@ -20,8 +20,6 @@ const VIEW_OPTIONS = [
   { value: 'list', label: 'Список' },
   { value: 'calendar', label: 'Календарь' },
 ] as const
-
-const openTransaction = (id: Id) => navigate(`/edit?id=${encodeURIComponent(id)}`)
 
 export function CalendarPage() {
   const today = useToday()
@@ -83,7 +81,7 @@ export function CalendarPage() {
                 <ul className={styles.list}>
                   {dayItems.map((view) => (
                     <li key={view.transaction.id}>
-                      <TransactionItem view={view} currency={data.currency} onSelect={openTransaction} />
+                      <TransactionRow view={view} currency={data.currency} />
                     </li>
                   ))}
                 </ul>

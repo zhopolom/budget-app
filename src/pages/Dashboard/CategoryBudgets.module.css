@@ -18,10 +18,17 @@
 }
 
 .link {
-  min-height: 24px;
+  position: relative;
   color: var(--accent-text);
   font-size: 15px;
   font-weight: 600;
+}
+
+/* Невидимая зона касания 48px вокруг короткой ссылки */
+.link::after {
+  content: '';
+  position: absolute;
+  inset: -14px -10px;
 }
 
 .card {

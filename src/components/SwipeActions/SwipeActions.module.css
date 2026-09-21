@@ -1,0 +1,49 @@
+.row {
+  position: relative;
+  overflow: hidden;
+  /* Вертикальную прокрутку оставляем списку, горизонталь забираем себе */
+  touch-action: pan-y;
+}
+
+.action {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 20px;
+  background: var(--surface-2);
+  color: var(--ink-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.action[data-side='right'] {
+  justify-content: flex-start;
+}
+
+.action[data-side='left'] {
+  justify-content: flex-end;
+}
+
+/* Дотянули до срабатывания — подсказываем цветом, что можно отпускать */
+.action[data-armed] {
+  background: var(--accent-soft);
+  color: var(--accent-text);
+}
+
+.icon {
+  font-size: 17px;
+  line-height: 1;
+}
+
+.content {
+  position: relative;
+  background: var(--surface);
+  transition: transform 0.2s var(--ease-out);
+}
+
+/* Пока палец на экране, строка следует за ним без сглаживания */
+.content[data-dragging] {
+  transition: none;
+}

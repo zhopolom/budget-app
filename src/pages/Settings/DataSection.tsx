@@ -135,6 +135,10 @@ export function DataSection() {
         type="file"
         accept="application/json,.json"
         className="visually-hidden"
+        // Поле служебное: открывается строкой «Восстановить из копии»,
+        // поэтому из фокуса и скринридера его убираем
+        tabIndex={-1}
+        aria-hidden="true"
         onChange={(event) => {
           const file = event.target.files?.[0]
           // Сбрасываем значение: иначе повторный выбор того же файла не сработает

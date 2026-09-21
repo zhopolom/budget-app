@@ -7,7 +7,7 @@ import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { SearchField } from '../../components/SearchField/SearchField'
 import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
-import { TransactionItem } from '../../components/TransactionItem/TransactionItem'
+import { TransactionRow } from '../../components/TransactionItem/TransactionRow'
 import {
   applyFilters,
   countActiveFilters,
@@ -17,7 +17,6 @@ import {
 } from '../../features/transactions/filters'
 import { groupByDay } from '../../features/transactions/grouping'
 import { useToday } from '../../hooks/useToday'
-import type { Id } from '../../types/entities'
 import { formatDayLabel } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { FiltersSheet } from './FiltersSheet'
@@ -28,9 +27,6 @@ const VIEW_OPTIONS = [
   { value: 'list', label: 'Список' },
   { value: 'calendar', label: 'Календарь' },
 ] as const
-
-// Вне компонента — стабильная ссылка, memo у TransactionItem не сбрасывается
-const openTransaction = (id: Id) => navigate(`/edit?id=${encodeURIComponent(id)}`)
 
 export function TransactionsPage() {
   const today = useToday()
@@ -139,7 +135,7 @@ export function TransactionsPage() {
               {group.items.map((view) => (
                 <li key={view.transaction.id}>
                   {/* Дата уже стоит в заголовке дня — в строке она лишняя */}
-                  <TransactionItem view={view} currency={data.currency} onSelect={openTransaction} />
+                  <TransactionRow view={view} currency={data.currency} />
                 </li>
               ))}
             </ul>
