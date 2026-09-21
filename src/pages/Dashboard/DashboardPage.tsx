@@ -3,6 +3,7 @@ import { useSelectedMonth } from '../../app/selectedMonth'
 import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { useToday } from '../../hooks/useToday'
 import { formatMonthGenitive } from '../../utils/dates'
+import { BackupReminderBanner } from './BackupReminderBanner'
 import { BalanceSummary } from './BalanceSummary'
 import { BudgetCard } from './BudgetCard'
 import { CategoryBudgets } from './CategoryBudgets'
@@ -21,6 +22,7 @@ export function DashboardPage() {
       <MonthSelector selection={selection} />
 
       <RecoveredAccountBanner />
+      <BackupReminderBanner />
 
       {data ? (
         <>

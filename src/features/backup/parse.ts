@@ -25,7 +25,14 @@ import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData } from './format'
  */
 
 export type ParseBackupResult =
-  | { ok: true; data: BackupData; schemaVersion: number; danglingReferences: number }
+  | {
+      ok: true
+      data: BackupData
+      schemaVersion: number
+      danglingReferences: number
+      /** Когда копия была снята. null — в файле не было разборчивой даты. */
+      exportedAt: number | null
+    }
   | { ok: false; error: string }
 
 type Unknown = Record<string, unknown>
@@ -191,7 +198,7 @@ function parseSettings(value: unknown): AppSettings {
   const defaults = createDefaultSettings()
   if (!isObject(value)) return defaults
 
-  const { baseCurrency, theme, lastAccountId } = value
+  const { baseCurrency, theme, lastAccountId, lastBackupAt, backupReminderSnoozedUntil } = value
   return {
     id: 'app',
     baseCurrency:
@@ -200,6 +207,8 @@ function parseSettings(value: unknown): AppSettings {
         : defaults.baseCurrency,
     theme: typeof theme === 'string' && THEMES.has(theme) ? (theme as AppSettings['theme']) : defaults.theme,
     lastAccountId: isId(lastAccountId) ? lastAccountId : null,
+    lastBackupAt: isTimestamp(lastBackupAt) ? lastBackupAt : null,
+    backupReminderSnoozedUntil: isTimestamp(backupReminderSnoozedUntil) ? backupReminderSnoozedUntil : null,
   }
 }
 
@@ -319,5 +328,13 @@ export function parseBackup(text: string): ParseBackupResult {
     return { ok: false, error: 'В копии нет ни счетов, ни операций' }
   }
 
-  return { ok: true, data, schemaVersion, danglingReferences: countDangling(data) }
+  const exported = typeof raw.exportDate === 'string' ? Date.parse(raw.exportDate) : Number.NaN
+
+  return {
+    ok: true,
+    data,
+    schemaVersion,
+    danglingReferences: countDangling(data),
+    exportedAt: Number.isFinite(exported) ? exported : null,
+  }
 }

@@ -9,5 +9,7 @@ export function createDefaultSettings(): AppSettings {
     baseCurrency: 'UAH',
     theme: 'system',
     lastAccountId: DEFAULT_ACCOUNT_IDS.card,
+    lastBackupAt: null,
+    backupReminderSnoozedUntil: null,
   }
 }

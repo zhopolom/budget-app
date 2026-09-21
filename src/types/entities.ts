@@ -173,4 +173,8 @@ export interface AppSettings {
   theme: ThemePreference
   /** Последний выбранный счёт — подставляется по умолчанию при добавлении операции. */
   lastAccountId: Id | null
+  /** Когда в последний раз сохраняли резервную копию. null — ни разу. */
+  lastBackupAt: number | null
+  /** До какого момента напоминание о копии отложено кнопкой «Позже». */
+  backupReminderSnoozedUntil: number | null
 }
