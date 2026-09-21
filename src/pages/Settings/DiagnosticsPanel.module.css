@@ -1,0 +1,31 @@
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.title {
+  padding-left: 4px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.blur {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.blurTitle {
+  padding-left: 4px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+}
+
+.hint {
+  padding-left: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+}

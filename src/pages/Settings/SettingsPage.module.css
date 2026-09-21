@@ -23,8 +23,17 @@
   color: var(--ink-2);
 }
 
+/* Кнопка, но выглядит подписью: нажатие на неё — служебный жест, а не действие */
 .version {
+  padding: 8px;
+  font: inherit;
   font-size: 13px;
   color: var(--ink-2);
   text-align: center;
+  background: none;
+  border: 0;
+}
+
+.tapHint {
+  color: var(--accent);
 }
