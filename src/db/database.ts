@@ -28,7 +28,13 @@ export class BudgetDatabase extends Dexie {
 
     for (const migration of migrations) {
       const version = this.version(migration.version).stores(migration.stores)
-      if (migration.upgrade) version.upgrade(migration.upgrade)
+      // Результат upgrade игнорируем: ремонт возвращает сводку, Dexie ждёт void
+      if (migration.upgrade) {
+        const run = migration.upgrade
+        version.upgrade(async (tx) => {
+          await run(tx)
+        })
+      }
     }
 
     this.on('populate', seedDefaults)

@@ -1,6 +1,7 @@
 import type { Transaction as DexieTransaction } from 'dexie'
 import { categoryBudgetIdFor } from '../features/budgets/ids'
 import type { Budget, CategoryBudget } from '../types/entities'
+import { repairDanglingReferences } from './repair'
 import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
 
 export interface Migration {
@@ -8,8 +9,8 @@ export interface Migration {
   description: string
   /** Таблицы, которые появились или изменили индексы. null — удалить таблицу. */
   stores: Record<string, string | null>
-  /** Преобразование данных при переходе на эту версию. */
-  upgrade?: (tx: DexieTransaction) => Promise<void> | void
+  /** Преобразование данных при переходе на эту версию. Результат игнорируется. */
+  upgrade?: (tx: DexieTransaction) => Promise<unknown> | unknown
 }
 
 /**
@@ -86,12 +87,16 @@ export const migrations: readonly Migration[] = [
   },
   {
     version: 3,
-    description: 'Регулярные переводы и индексы ссылок на счета у расписаний',
+    description: 'Регулярные переводы, индексы ссылок на счета у расписаний, ремонт битых ссылок',
     stores: SCHEMA_V3,
     /**
      * Правила v0.2 — это расходы и доходы с accountId и categoryId, то есть
      * уже готовые RecurringEntry: переписывать их не нужно.
+     *
+     * Зато у пользователя v0.2 мог сработать баг удаления счёта, поэтому
+     * миграция чинит битые ссылки — см. db/repair.ts.
      */
+    upgrade: repairDanglingReferences,
   },
 ]
 

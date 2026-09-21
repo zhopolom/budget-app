@@ -8,6 +8,7 @@ import { BudgetCard } from './BudgetCard'
 import { CategoryBudgets } from './CategoryBudgets'
 import styles from './DashboardPage.module.css'
 import { RecentTransactions } from './RecentTransactions'
+import { RecoveredAccountBanner } from './RecoveredAccountBanner'
 import { useDashboardData } from './useDashboardData'
 
 export function DashboardPage() {
@@ -18,6 +19,8 @@ export function DashboardPage() {
   return (
     <div className={styles.page}>
       <MonthSelector selection={selection} />
+
+      <RecoveredAccountBanner />
 
       {data ? (
         <>

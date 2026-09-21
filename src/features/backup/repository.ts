@@ -1,4 +1,5 @@
 import { db } from '../../db/database'
+import { repairDanglingReferences, type RepairSummary } from '../../db/repair'
 import { SETTINGS_ID } from '../settings/defaults'
 import { settingsRepository } from '../settings/repository'
 import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData, type BackupFile } from './format'
@@ -44,11 +45,11 @@ export function serializeBackup(backup: BackupFile): string {
  * Всё в одной транзакции Dexie — оборванное восстановление не оставит
  * половину старых данных вперемешку с половиной новых.
  */
-export async function restoreBackup(data: BackupData): Promise<void> {
-  await db.transaction(
+export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
+  return db.transaction(
     'rw',
     [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],
-    async () => {
+    async (transaction) => {
       await Promise.all([
         db.accounts.clear(),
         db.categories.clear(),
@@ -67,6 +68,10 @@ export async function restoreBackup(data: BackupData): Promise<void> {
         db.recurringTransactions.bulkAdd(data.recurringTransactions),
         db.settings.put({ ...data.settings, id: SETTINGS_ID }),
       ])
+
+      // Копия могла быть снята с базы, где уже были битые ссылки: чиним тем же
+      // кодом, что и миграция, — иначе правило продолжит создавать операции в никуда
+      return repairDanglingReferences(transaction)
     },
   )
 }
