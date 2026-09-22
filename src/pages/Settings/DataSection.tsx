@@ -215,7 +215,7 @@ function describeNormalization({ currencies, lastAccountReset }: NormalizationSu
   return parts.join('')
 }
 
-function describeCounts({ accounts, categories, transactions, recurringTransactions }: BackupCounts): string {
+function describeCounts({ accounts, categories, transactions, recurringTransactions, savingsGoals }: BackupCounts): string {
   const parts = [
     `${transactions} ${pluralRu(transactions, ['операция', 'операции', 'операций'])}`,
     `${accounts} ${pluralRu(accounts, ['счёт', 'счёта', 'счетов'])}`,
@@ -226,5 +226,6 @@ function describeCounts({ accounts, categories, transactions, recurringTransacti
       `${recurringTransactions} ${pluralRu(recurringTransactions, ['регулярная операция', 'регулярные операции', 'регулярных операций'])}`,
     )
   }
+  if (savingsGoals > 0) parts.push(`${savingsGoals} ${pluralRu(savingsGoals, ['цель', 'цели', 'целей'])}`)
   return `В копии ${parts.join(', ')}`
 }

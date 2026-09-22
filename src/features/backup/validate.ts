@@ -47,6 +47,12 @@ function findDuplicates(data: BackupData): string[] {
   report('categoryBudgets.id', data.categoryBudgets.map((item) => item.id))
   report('recurringTransactions.id', data.recurringTransactions.map((item) => item.id))
   report('pendingOccurrences.id', data.pendingOccurrences.map((item) => item.id))
+  report('savingsGoals.id', data.savingsGoals.map((item) => item.id))
+  report('budgetTemplates.id', data.budgetTemplates.map((item) => item.id))
+  // Два лимита на одну категорию внутри шаблона применить нельзя однозначно
+  for (const template of data.budgetTemplates) {
+    report(`budgetTemplates[${template.id}].categoryId`, template.categoryLimits.map((limit) => limit.categoryId))
+  }
 
   // Составные уникальные индексы базы: один бюджет на месяц, один лимит на
   // категорию в месяц, одна операция на вхождение расписания

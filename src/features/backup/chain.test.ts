@@ -82,6 +82,38 @@ const V4 = file(4, {
   settings: { ...SETTINGS, lastBackupAt: null, backupReminderSnoozedUntil: null },
 })
 
+const V5 = file(5, {
+  accounts: [...ACCOUNTS, { id: 'savings', name: 'Копилка', type: 'savings', initialBalance: 200_000, currency: 'UAH', createdAt: 3, updatedAt: 3 }],
+  categories: CATEGORIES,
+  transactions: [...ENTRIES, TRANSFER],
+  budgets: [{ id: '2026-08', year: 2026, month: 8, totalLimit: 1_500_000 }],
+  categoryBudgets: [
+    { id: '2026-08:cat-exp-groceries', categoryId: 'cat-exp-groceries', year: 2026, month: 8, limitAmount: 500_000, rollover: true, createdAt: 1, updatedAt: 1 },
+  ],
+  recurringTransactions: [{ ...RULE, executionMode: 'automatic' }],
+  pendingOccurrences: [],
+  savingsGoals: [
+    { id: 'goal-1', name: 'MacBook', icon: '💻', targetAmount: 8_000_000, targetDate: '2026-12-31', linkedAccountId: 'savings', isArchived: false, createdAt: 4, updatedAt: 4 },
+    { id: 'goal-2', name: 'Отпуск', icon: '🏖️', targetAmount: 3_000_000, currentAmount: 750_000, isArchived: true, createdAt: 5, updatedAt: 5 },
+    // Счёт этой цели в копии отсутствует: ремонт оставит её без счёта
+    { id: 'goal-3', name: 'Без счёта', icon: '🎯', targetAmount: 100_000, linkedAccountId: 'acc-gone', isArchived: false, createdAt: 6, updatedAt: 6 },
+  ],
+  budgetTemplates: [
+    {
+      id: 'tpl-1',
+      name: 'Обычный месяц',
+      totalLimit: 2_000_000,
+      categoryLimits: [
+        { categoryId: 'cat-exp-groceries', limitAmount: 600_000 },
+        { categoryId: 'cat-gone', limitAmount: 100 },
+      ],
+      createdAt: 7,
+      updatedAt: 7,
+    },
+  ],
+  settings: { ...SETTINGS, lastBackupAt: null, backupReminderSnoozedUntil: null },
+})
+
 async function restoreFile(text: string) {
   const parsed = parseBackup(text)
   if (!parsed.ok) throw new Error(parsed.error)
@@ -95,12 +127,12 @@ describe('цепочки копий до текущей версии', () => {
   it('свежая установка сразу на последней схеме', () => {
     expect(db.verno).toBe(DB_VERSION)
     expect(DB_VERSION).toBe(5)
-    expect(BACKUP_SCHEMA_VERSION).toBe(4)
+    expect(BACKUP_SCHEMA_VERSION).toBe(5)
   })
 
   it('копия 0.1 → текущая база: лимиты переехали, баланс тот же', async () => {
     const parsed = await restoreFile(V1)
-    expect(parsed.migrationSteps).toEqual([2, 3, 4])
+    expect(parsed.migrationSteps).toEqual([2, 3, 4, 5])
 
     expect(await db.transactions.count()).toBe(2)
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
@@ -113,7 +145,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.2 → текущая база: расписание стало автоматическим', async () => {
     const parsed = await restoreFile(V2)
-    expect(parsed.migrationSteps).toEqual([3, 4])
+    expect(parsed.migrationSteps).toEqual([3, 4, 5])
 
     expect(await db.transactions.count()).toBe(3)
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
@@ -123,7 +155,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.3 → текущая база: регулярный перевод и настройки на месте', async () => {
     const parsed = await restoreFile(V3)
-    expect(parsed.migrationSteps).toEqual([4])
+    expect(parsed.migrationSteps).toEqual([4, 5])
 
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
     const rules = await db.recurringTransactions.orderBy('id').toArray()
@@ -136,7 +168,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.4 → текущая база: корректировка, режим и вхождение переносятся как есть', async () => {
     const parsed = await restoreFile(V4)
-    expect(parsed.migrationSteps).toEqual([])
+    expect(parsed.migrationSteps).toEqual([5])
 
     // Корректировка −10 ₴ на наличных
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(
@@ -146,21 +178,72 @@ describe('цепочки копий до текущей версии', () => {
     expect(await db.pendingOccurrences.get('p-1')).toMatchObject({ recurringId: 'r-1', status: 'pending' })
   })
 
+  it('копия 0.5 → текущая база: цели, шаблоны и перенос остатка на месте, битые ссылки починены', async () => {
+    const parsed = await restoreFile(V5)
+    expect(parsed.migrationSteps).toEqual([])
+    expect(parsed.danglingReferences).toBe(1)
+
+    expect((await db.categoryBudgets.get('2026-08:cat-exp-groceries'))?.rollover).toBe(true)
+    expect(await db.savingsGoals.get('goal-1')).toMatchObject({ linkedAccountId: 'savings', targetAmount: 8_000_000 })
+    expect(await db.savingsGoals.get('goal-2')).toMatchObject({ currentAmount: 750_000, isArchived: true })
+    const orphan = await db.savingsGoals.get('goal-3')
+    expect(orphan?.linkedAccountId).toBeUndefined()
+    expect(orphan?.currentAmount).toBe(0)
+    expect((await db.budgetTemplates.get('tpl-1'))?.categoryLimits).toEqual([
+      { categoryId: 'cat-exp-groceries', limitAmount: 600_000 },
+    ])
+    // Общий баланс: 32 620 + 2 000 начального остатка копилки
+    expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(
+      EXPECTED_BALANCE + Money.fromMajor(2_000),
+    )
+  })
+
   it('копия текущей базы читается назад без изменений', async () => {
-    await restoreFile(V4)
+    await restoreFile(V5)
     const before = {
       transactions: await db.transactions.orderBy('id').toArray(),
       rules: await db.recurringTransactions.orderBy('id').toArray(),
       pending: await db.pendingOccurrences.orderBy('id').toArray(),
+      goals: await db.savingsGoals.orderBy('id').toArray(),
+      templates: await db.budgetTemplates.orderBy('id').toArray(),
+      limits: await db.categoryBudgets.orderBy('id').toArray(),
     }
 
-    const text = serializeBackup(await createBackup(new Date(2026, 8, 21), '0.4.0'))
+    const text = serializeBackup(await createBackup(new Date(2026, 8, 21), '0.5.0'))
     await resetTestDatabase()
     await restoreFile(text)
 
     expect(await db.transactions.orderBy('id').toArray()).toEqual(before.transactions)
     expect(await db.recurringTransactions.orderBy('id').toArray()).toEqual(before.rules)
     expect(await db.pendingOccurrences.orderBy('id').toArray()).toEqual(before.pending)
+    expect(await db.savingsGoals.orderBy('id').toArray()).toEqual(before.goals)
+    expect(await db.budgetTemplates.orderBy('id').toArray()).toEqual(before.templates)
+    expect(await db.categoryBudgets.orderBy('id').toArray()).toEqual(before.limits)
+  })
+
+  it('отказывается от копии с двумя лимитами на одну категорию в шаблоне', () => {
+    const parsed = parseBackup(
+      file(5, {
+        accounts: ACCOUNTS,
+        categories: CATEGORIES,
+        transactions: [],
+        budgetTemplates: [
+          {
+            id: 'tpl',
+            name: 'Дубль',
+            totalLimit: 0,
+            categoryLimits: [
+              { categoryId: 'cat-exp-groceries', limitAmount: 100 },
+              { categoryId: 'cat-exp-groceries', limitAmount: 200 },
+            ],
+            createdAt: 1,
+            updatedAt: 1,
+          },
+        ],
+        settings: SETTINGS,
+      }),
+    )
+    expect(parsed).toMatchObject({ ok: false, error: expect.stringContaining('повторяющиеся') })
   })
 
   it('копия более новой версии отклоняется с понятным сообщением', () => {

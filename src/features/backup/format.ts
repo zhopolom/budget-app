@@ -2,10 +2,12 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetTemplate,
   Category,
   CategoryBudget,
   PendingOccurrence,
   RecurringTransaction,
+  SavingsGoal,
   Transaction,
 } from '../../types/entities'
 
@@ -19,8 +21,11 @@ import type {
  * v4 добавила корректировки остатка, режим подтверждения у расписаний
  * и таблицу ожидающих вхождений. Старые копии читаются: у их правил
  * режим automatic, а раздел pendingOccurrences просто пуст.
+ *
+ * v5 добавила цели накоплений, шаблоны бюджета и флаг переноса остатка
+ * у лимитов категорий. Новые разделы у старых копий пусты, флаг — выключен.
  */
-export const BACKUP_SCHEMA_VERSION = 4
+export const BACKUP_SCHEMA_VERSION = 5
 
 /** Метка приложения: чтобы не пытаться восстановиться из чужого JSON. */
 export const BACKUP_APP = 'budget'
@@ -33,6 +38,8 @@ export interface BackupData {
   categoryBudgets: CategoryBudget[]
   recurringTransactions: RecurringTransaction[]
   pendingOccurrences: PendingOccurrence[]
+  savingsGoals: SavingsGoal[]
+  budgetTemplates: BudgetTemplate[]
   settings: AppSettings
 }
 
@@ -54,6 +61,8 @@ export interface BackupCounts {
   categoryBudgets: number
   recurringTransactions: number
   pendingOccurrences: number
+  savingsGoals: number
+  budgetTemplates: number
 }
 
 export function countBackup(data: BackupData): BackupCounts {
@@ -65,6 +74,8 @@ export function countBackup(data: BackupData): BackupCounts {
     categoryBudgets: data.categoryBudgets.length,
     recurringTransactions: data.recurringTransactions.length,
     pendingOccurrences: data.pendingOccurrences.length,
+    savingsGoals: data.savingsGoals.length,
+    budgetTemplates: data.budgetTemplates.length,
   }
 }
 

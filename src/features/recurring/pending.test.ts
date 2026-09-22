@@ -4,6 +4,7 @@ import { resetTestDatabase } from '../../test/db'
 import type { Id, RecurringTransaction } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { DEFAULT_ACCOUNT_IDS } from '../accounts/defaults'
+import { BACKUP_SCHEMA_VERSION } from '../backup/format'
 import { createBackup, restoreBackup, serializeBackup } from '../backup/repository'
 import { parseBackup } from '../backup/parse'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
@@ -314,7 +315,7 @@ describe('резервная копия', () => {
     await resetTestDatabase()
     const parsed = parseBackup(file)
     if (!parsed.ok) throw new Error(parsed.error)
-    expect(parsed.schemaVersion).toBe(4)
+    expect(parsed.schemaVersion).toBe(BACKUP_SCHEMA_VERSION)
     await restoreBackup(parsed.data)
 
     expect((await db.recurringTransactions.get(id))?.executionMode).toBe('confirm')

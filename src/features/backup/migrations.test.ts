@@ -6,6 +6,7 @@ import {
   migrateBackupV1ToV2,
   migrateBackupV2ToV3,
   migrateBackupV3ToV4,
+  migrateBackupV4ToV5,
 } from './migrations'
 
 /**
@@ -89,24 +90,41 @@ describe('migrateBackupV3ToV4', () => {
   })
 })
 
+describe('migrateBackupV4ToV5', () => {
+  it('заводит пустые разделы целей и шаблонов, лимиты не трогает', () => {
+    const limits = [{ id: '2026-08:g', categoryId: 'g', year: 2026, month: 8, limitAmount: 100 }]
+    const result = migrateBackupV4ToV5({ categoryBudgets: limits })
+    expect(result.savingsGoals).toEqual([])
+    expect(result.budgetTemplates).toEqual([])
+    expect(result.categoryBudgets).toBe(limits)
+  })
+
+  it('существующие цели и шаблоны проходят как есть', () => {
+    const goals = [{ id: 'goal', name: 'MacBook' }]
+    expect(migrateBackupV4ToV5({ savingsGoals: goals }).savingsGoals).toBe(goals)
+  })
+})
+
 describe('цепочка', () => {
   it('идёт подряд от 1 до текущей версии', () => {
     expect(backupMigrations.map((step) => [step.from, step.to])).toEqual([
       [1, 2],
       [2, 3],
       [3, 4],
+      [4, 5],
     ])
     expect(backupMigrations.at(-1)?.to).toBe(BACKUP_SCHEMA_VERSION)
   })
 
   it('копия v1 проходит все шаги, актуальная — ни одного', () => {
     const fromV1 = migrateBackupData({ budgets: [V1_BUDGET] }, 1)
-    expect(fromV1.steps).toEqual([2, 3, 4])
+    expect(fromV1.steps).toEqual([2, 3, 4, 5])
     expect(fromV1.data.categoryBudgets).toHaveLength(2)
     expect(fromV1.data.pendingOccurrences).toEqual([])
+    expect(fromV1.data.savingsGoals).toEqual([])
 
     const fromV3 = migrateBackupData({ recurringTransactions: [{ id: 'r' }] }, 3)
-    expect(fromV3.steps).toEqual([4])
+    expect(fromV3.steps).toEqual([4, 5])
     expect(fromV3.data.recurringTransactions).toEqual([{ id: 'r', executionMode: 'automatic' }])
 
     const current = migrateBackupData({ accounts: [] }, BACKUP_SCHEMA_VERSION)

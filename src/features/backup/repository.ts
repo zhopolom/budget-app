@@ -17,20 +17,34 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
       db.categoryBudgets,
       db.recurringTransactions,
       db.pendingOccurrences,
+      db.savingsGoals,
+      db.budgetTemplates,
       db.settings,
     ],
     async (): Promise<BackupData> => {
-      const [accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, pendingOccurrences, settings] =
-        await Promise.all([
-          db.accounts.toArray(),
-          db.categories.toArray(),
-          db.transactions.toArray(),
-          db.budgets.toArray(),
-          db.categoryBudgets.toArray(),
-          db.recurringTransactions.toArray(),
-          db.pendingOccurrences.toArray(),
-          settingsRepository.get(),
-        ])
+      const [
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        categoryBudgets,
+        recurringTransactions,
+        pendingOccurrences,
+        savingsGoals,
+        budgetTemplates,
+        settings,
+      ] = await Promise.all([
+        db.accounts.toArray(),
+        db.categories.toArray(),
+        db.transactions.toArray(),
+        db.budgets.toArray(),
+        db.categoryBudgets.toArray(),
+        db.recurringTransactions.toArray(),
+        db.pendingOccurrences.toArray(),
+        db.savingsGoals.toArray(),
+        db.budgetTemplates.toArray(),
+        settingsRepository.get(),
+      ])
 
       return {
         accounts,
@@ -40,6 +54,8 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
         categoryBudgets,
         recurringTransactions,
         pendingOccurrences,
+        savingsGoals,
+        budgetTemplates,
         settings,
       }
     },
@@ -82,6 +98,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
       db.categoryBudgets,
       db.recurringTransactions,
       db.pendingOccurrences,
+      db.savingsGoals,
+      db.budgetTemplates,
       db.settings,
     ],
     async (transaction) => {
@@ -93,6 +111,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.categoryBudgets.clear(),
         db.recurringTransactions.clear(),
         db.pendingOccurrences.clear(),
+        db.savingsGoals.clear(),
+        db.budgetTemplates.clear(),
       ])
 
       await Promise.all([
@@ -103,6 +123,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.categoryBudgets.bulkAdd(data.categoryBudgets),
         db.recurringTransactions.bulkAdd(data.recurringTransactions),
         db.pendingOccurrences.bulkAdd(data.pendingOccurrences),
+        db.savingsGoals.bulkAdd(data.savingsGoals),
+        db.budgetTemplates.bulkAdd(data.budgetTemplates),
         db.settings.put({ ...data.settings, id: SETTINGS_ID }),
       ])
 

@@ -2,10 +2,12 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetTemplate,
   Category,
   CategoryBudget,
   PendingOccurrence,
   RecurringTransaction,
+  SavingsGoal,
   Transaction,
 } from '../../types/entities'
 import { isValidIsoDate } from '../../utils/dates'
@@ -164,7 +166,7 @@ const isYear = (value: unknown): value is number =>
 
 function parseCategoryBudget(value: unknown): CategoryBudget | null {
   if (!isObject(value)) return null
-  const { id, categoryId, month, year, limitAmount, createdAt, updatedAt } = value
+  const { id, categoryId, month, year, limitAmount, rollover, createdAt, updatedAt } = value
   if (!isId(id) || !isId(categoryId) || !isMonth(month) || !isYear(year)) return null
   if (!isPositiveMoneyAmount(limitAmount)) return null
 
@@ -175,6 +177,55 @@ function parseCategoryBudget(value: unknown): CategoryBudget | null {
     month: month as number,
     year: year as number,
     limitAmount,
+    // Перенос остатка (0.5): храним только включённым
+    ...(rollover === true ? { rollover: true } : {}),
+    createdAt: stamp,
+    updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
+  }
+}
+
+/** Цель накоплений (v5). Ссылка на счёт проверяется не здесь: её чинит ремонт, как у операций. */
+function parseSavingsGoal(value: unknown): SavingsGoal | null {
+  if (!isObject(value)) return null
+  const { id, name, icon, targetAmount, currentAmount, targetDate, linkedAccountId, isArchived, createdAt, updatedAt } = value
+  if (!isId(id) || !isText(name) || !isPositiveMoneyAmount(targetAmount)) return null
+  if (currentAmount !== undefined && currentAmount !== null && !isNonNegativeMoneyAmount(currentAmount)) return null
+  if (targetDate !== undefined && targetDate !== null && !isDate(targetDate)) return null
+
+  const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
+  return {
+    id,
+    name,
+    icon: isText(icon) && icon !== '' ? icon : '🎯',
+    targetAmount,
+    // У цели со счётом накопленное считается по остатку — ручную сумму не переносим
+    ...(isId(linkedAccountId) ? { linkedAccountId } : isNonNegativeMoneyAmount(currentAmount) ? { currentAmount } : {}),
+    ...(isDate(targetDate) ? { targetDate: targetDate as string } : {}),
+    isArchived: isArchived === true,
+    createdAt: stamp,
+    updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
+  }
+}
+
+/** Шаблон бюджета (v5). Лимиты на неизвестные категории снимает ремонт после восстановления. */
+function parseBudgetTemplate(value: unknown): BudgetTemplate | null {
+  if (!isObject(value)) return null
+  const { id, name, totalLimit, categoryLimits, createdAt, updatedAt } = value
+  if (!isId(id) || !isText(name) || !isNonNegativeMoneyAmount(totalLimit)) return null
+  if (categoryLimits !== undefined && !Array.isArray(categoryLimits)) return null
+
+  const limits: BudgetTemplate['categoryLimits'] = []
+  for (const limit of categoryLimits ?? []) {
+    if (!isObject(limit) || !isId(limit.categoryId) || !isPositiveMoneyAmount(limit.limitAmount)) return null
+    limits.push({ categoryId: limit.categoryId, limitAmount: limit.limitAmount })
+  }
+
+  const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
+  return {
+    id,
+    name,
+    totalLimit,
+    categoryLimits: limits,
     createdAt: stamp,
     updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
   }
@@ -299,7 +350,11 @@ function countDangling(data: BackupData): number {
     return !accounts.has(item.accountId) || !categories.has(item.categoryId)
   }
 
-  return data.transactions.filter(isBroken).length + data.recurringTransactions.filter(isBroken).length
+  const brokenGoals = data.savingsGoals.filter(
+    (goal) => goal.linkedAccountId !== undefined && !accounts.has(goal.linkedAccountId),
+  ).length
+
+  return data.transactions.filter(isBroken).length + data.recurringTransactions.filter(isBroken).length + brokenGoals
 }
 
 export function parseBackup(text: string): ParseBackupResult {
@@ -344,6 +399,12 @@ export function parseBackup(text: string): ParseBackupResult {
   const pendingOccurrences = parseList(source.pendingOccurrences, parsePendingOccurrence, 'ожидающие операции')
   if (typeof pendingOccurrences === 'string') return { ok: false, error: pendingOccurrences }
 
+  const savingsGoals = parseList(source.savingsGoals, parseSavingsGoal, 'цели')
+  if (typeof savingsGoals === 'string') return { ok: false, error: savingsGoals }
+
+  const budgetTemplates = parseList(source.budgetTemplates, parseBudgetTemplate, 'шаблоны бюджета')
+  if (typeof budgetTemplates === 'string') return { ok: false, error: budgetTemplates }
+
   // Лимиты v1, перенесённые миграцией, могут дублировать друг друга:
   // дубли не схлопываем, их найдёт validateBackup и откажет от файла целиком
   const parsed: BackupData = {
@@ -354,6 +415,8 @@ export function parseBackup(text: string): ParseBackupResult {
     categoryBudgets,
     recurringTransactions,
     pendingOccurrences,
+    savingsGoals,
+    budgetTemplates,
     settings: parseSettings(source.settings),
   }
 
