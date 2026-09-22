@@ -86,6 +86,75 @@ test('пауза держится, а переключение не плодит
   await expectTransactions(page, 'Аренда', 1)
 })
 
+/**
+ * Паузу длиной в дни через интерфейс не сделать — правило всегда начинается
+ * не раньше сегодняшнего дня. Поэтому правило на паузе кладётся прямо в
+ * IndexedDB: это подготовка данных, а проверяется всё через интерфейс.
+ */
+test('возобновление в день платежа: число в диалоге не врёт', async ({ page }) => {
+  await openApp(page)
+
+  const today = await page.evaluate(() => {
+    const iso = (date: Date) =>
+      `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+    const shift = (days: number) => {
+      const date = new Date()
+      date.setDate(date.getDate() + days)
+      return iso(date)
+    }
+    return { today: iso(new Date()), tenDaysAgo: shift(-10), fiveDaysAgo: shift(-5) }
+  })
+
+  await page.evaluate(async (dates) => {
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('budget')
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => reject(request.error)
+    })
+
+    await new Promise<void>((resolve, reject) => {
+      const transaction = database.transaction('recurringTransactions', 'readwrite')
+      transaction.objectStore('recurringTransactions').put({
+        id: 'e2e-paused',
+        type: 'expense',
+        amount: 10_000,
+        categoryId: 'cat-exp-subscriptions',
+        accountId: 'acc-card',
+        note: 'Пауза',
+        frequency: 'daily',
+        interval: 1,
+        startDate: dates.tenDaysAgo,
+        nextOccurrence: dates.fiveDaysAgo,
+        isActive: false,
+        createdAt: 1,
+        updatedAt: 1,
+      })
+      transaction.oncomplete = () => resolve()
+      transaction.onerror = () => reject(transaction.error)
+    })
+
+    database.close()
+  }, today)
+
+  await page.reload()
+  await goToSettings(page)
+  await page.getByRole('button', { name: 'Регулярные операции' }).click()
+  await page.getByRole('button', { name: /Пауза/ }).click()
+  await page.getByRole('button', { name: 'Включить' }).click()
+
+  // Пять дней паузы — пять пропущенных. Сегодняшний платёж в это число не входит,
+  // и приложение говорит об этом прямо
+  const dialog = page.getByRole('alertdialog')
+  await expect(dialog).toContainText('пропущено 5 платежей')
+  await expect(dialog).toContainText('Сегодняшний платёж будет создан в любом случае')
+
+  await confirmButton(page, 'Не создавать').click()
+  await page.reload()
+
+  // Ровно один платёж — сегодняшний, как и было обещано
+  await expectTransactions(page, 'Пауза', 1)
+})
+
 test('подтверждение удаления правила называет судьбу уже созданных операций', async ({ page }) => {
   await openApp(page)
   await createRule(page, 'Карта', 'Подписка')

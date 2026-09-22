@@ -183,6 +183,20 @@ describe('миграция v2 → v3', () => {
 
     upgraded.close()
   })
+
+  it('чинит правило с битыми счётом и категорией одной записью', async () => {
+    await writeV2Database({ recurring: [{ ...ORPHAN_RULE, categoryId: 'cat-deleted' }] })
+
+    const upgraded = await openUpgraded()
+
+    const rule = await upgraded.recurringTransactions.get(ORPHAN_RULE.id)
+    expect(rule && 'accountId' in rule && rule.accountId).toBe(RECOVERED_ACCOUNT_ID)
+    expect(rule && 'categoryId' in rule && rule.categoryId).toBe(OTHER.id)
+    // Битый счёт правило останавливает — в отличие от одной лишь категории
+    expect(rule?.isActive).toBe(false)
+
+    upgraded.close()
+  })
 })
 
 describe('повторный ремонт', () => {
@@ -208,7 +222,13 @@ describe('повторный ремонт', () => {
       (tx) => repairDanglingReferences(tx),
     )
 
-    expect(summary).toEqual({ transactions: 0, recurring: 0, categories: 0, createdRecoveredAccount: false })
+    expect(summary).toEqual({
+      transactions: 0,
+      recurring: 0,
+      categories: 0,
+      recurringCategories: 0,
+      createdRecoveredAccount: false,
+    })
     expect(await upgraded.accounts.toArray()).toEqual(before.accounts)
     expect(await upgraded.transactions.toArray()).toEqual(before.transactions)
     expect(await upgraded.recurringTransactions.toArray()).toEqual(before.rules)

@@ -146,46 +146,39 @@ describe('баг 2: возобновление после паузы досоз�
     expect((await recurringRepository.generateDue('2026-09-20')).created).toBe(0)
   })
 
-  it('countMissed показывает, сколько платежей пропущено за паузу', async () => {
+  it('показывает, сколько платежей пропущено за паузу', async () => {
     const id = await seedRule({ startDate: '2026-01-14' })
     await recurringRepository.generateDue('2026-01-20')
     await recurringRepository.setActive(id, false, '2026-01-20')
 
-    expect(await recurringRepository.countMissed(id, '2026-09-20')).toBe(8)
-    expect(await recurringRepository.countMissed(id, '2026-01-20')).toBe(0)
+    expect((await recurringRepository.resumeInfo(id, '2026-09-20')).missed).toBe(8)
+    expect((await recurringRepository.resumeInfo(id, '2026-01-20')).missed).toBe(0)
   })
 
-  it('countMissed не считает вхождения, которые уже созданы', async () => {
+  it('не считает пропущенными вхождения, которые уже созданы', async () => {
     const id = await seedRule({ startDate: '2026-01-14' })
-    // Сегодняшний платёж уже создан — пропущенным он не считается
+    // Сегодняшний платёж уже создан — ни пропущенным, ни предстоящим он не считается
     await recurringRepository.generateDue('2026-01-14')
     await recurringRepository.setActive(id, false, '2026-01-14')
 
-    expect(await recurringRepository.countMissed(id, '2026-01-14')).toBe(0)
+    expect(await recurringRepository.resumeInfo(id, '2026-01-14')).toEqual({
+      missed: 0,
+      dueToday: false,
+      finished: false,
+    })
   })
 
-  it('«Не создавать» не создаёт платёж и в день вхождения', async () => {
-    const id = await seedRule({ startDate: '2026-01-14', nextOccurrence: '2026-02-14' })
-    await recurringRepository.setActive(id, false, '2026-02-01')
-
-    // 14 сентября — день вхождения: он входит в число пропущенных, от которых отказались
-    expect(await recurringRepository.countMissed(id, '2026-09-14')).toBe(8)
-    await recurringRepository.setActive(id, true, '2026-09-14')
-
-    expect((await recurringRepository.generateDue('2026-09-14')).created).toBe(0)
-    expect((await db.recurringTransactions.get(id))?.nextOccurrence).toBe('2026-10-14')
-  })
-
-  it('countMissed не занижает число из-за лимита одного прохода', async () => {
+  it('не занижает число пропущенного из-за лимита одного прохода', async () => {
     // Ежедневное правило на паузе почти два года: больше 400 вхождений
     const id = await seedRule({ frequency: 'daily', startDate: '2025-01-01', nextOccurrence: '2025-01-01' })
     await recurringRepository.setActive(id, false, '2025-01-01')
 
-    const missed = await recurringRepository.countMissed(id, '2026-09-20')
-    expect(missed).toBe(628)
+    const { missed, dueToday } = await recurringRepository.resumeInfo(id, '2026-09-20')
+    expect(missed).toBe(627)
+    expect(dueToday).toBe(true)
 
-    // И досоздаёт ровно столько, сколько назвал
-    expect(await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })).toBe(missed)
+    // Досоздание добавляет к пропущенному сегодняшний платёж — и ни одного лишнего
+    expect(await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })).toBe(missed + 1)
   })
 })
 

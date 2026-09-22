@@ -9,6 +9,7 @@ import {
   GLASS_BLUR_OPTIONS,
   type GlassBlurStep,
 } from '../../features/diagnostics/glassBlur'
+import { useDiagnosticJournal } from '../../features/diagnostics/journal'
 import styles from './DiagnosticsPanel.module.css'
 
 /**
@@ -24,6 +25,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   const viewport = useViewportReadout()
   const worker = useServiceWorkerStatus()
   const [blur, setBlur] = useState<GlassBlurStep>(currentGlassBlur)
+  const journal = useDiagnosticJournal()
 
   const changeBlur = (step: GlassBlurStep) => {
     setBlur(step)
@@ -62,6 +64,18 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
         />
         <p className={styles.hint}>Сброс — при перезагрузке страницы.</p>
       </div>
+
+      {journal.length > 0 && (
+        <div className={styles.journal}>
+          <h3 className={styles.blurTitle}>Сбои</h3>
+          <ul className={styles.journalList}>
+            {journal.map((entry, index) => (
+              // Записи не редактируются и не переупорядочиваются — индекс тут устойчив
+              <li key={index}>{entry}</li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <Button variant="secondary" block onClick={onClose}>
         Скрыть диагностику

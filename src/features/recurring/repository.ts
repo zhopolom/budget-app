@@ -9,6 +9,7 @@ import {
   MAX_OCCURRENCES_PER_RUN,
   nextOccurrenceOnOrAfter,
   occurrencesBetween,
+  resumeOccurrence,
 } from './occurrences'
 
 /**
@@ -24,6 +25,16 @@ type Draft<T> = Omit<T, 'id' | 'nextOccurrence' | 'lastGeneratedAt' | 'isActive'
 export type RecurringEntryInput = Draft<RecurringEntry>
 export type RecurringTransferInput = Draft<RecurringTransfer>
 export type RecurringInput = RecurringEntryInput | RecurringTransferInput
+
+/** Что ждёт правило при возобновлении — на этом строится диалог. */
+export interface ResumeInfo {
+  /** Сколько платежей досоздаст backfill. Сегодняшний сюда не входит. */
+  missed: number
+  /** Сегодня день вхождения: этот платёж создастся в любом случае. */
+  dueToday: boolean
+  /** Расписание закончилось: возобновлять нечего, досоздать — можно. */
+  finished: boolean
+}
 
 export interface GenerationResult {
   /** Сколько операций создано. */
@@ -160,10 +171,10 @@ export const recurringRepository = {
    * больше нуля только при явном досоздании.
    *
    * Пауза по умолчанию означает, что за это время платежей не было: при
-   * включении ближайшее вхождение отсчитывается от завтрашнего дня, потому
-   * что сегодняшнее вхождение тоже входит в число пропущенных, от которых
-   * пользователь только что отказался. Иначе первый же generateDue создал бы
-   * платежи за всю паузу — ровно этот баг и чинится.
+   * включении ближайшее вхождение отсчитывается от сегодняшнего дня, а не от
+   * того, что осталось в прошлом. Иначе первый же generateDue создал бы
+   * платежи за всю паузу — ровно этот баг и чинится. Если платёж выпадает на
+   * сегодня, он создастся: пауза кончилась, и он не пропущен, а наступил.
    *
    * С backfill: true платежи создаются здесь же, а не при следующем открытии
    * приложения: кнопка «Создать N» должна создавать N, а не обещать.
@@ -202,8 +213,7 @@ export const recurringRepository = {
         return (await generateForRule(refreshed, today, MAX_BACKFILL_OCCURRENCES)).created
       }
 
-      const from = addDaysIso(today, 1)
-      const next = nextOccurrenceOnOrAfter(rule, rule.startDate > from ? rule.startDate : from)
+      const next = resumeOccurrence(rule, today)
       if (next === null) {
         throw new Error('Расписание уже закончилось — измените дату окончания')
       }
@@ -214,17 +224,32 @@ export const recurringRepository = {
   },
 
   /**
-   * Сколько вхождений накопилось в промежутке [nextOccurrence; today] и ещё не
-   * создано. Столько платежей предложит досоздать диалог при возобновлении —
-   * и ровно столько создаст, поэтому лимит одного прохода здесь не годится.
+   * Что произойдёт при возобновлении: сколько платежей досоздаст backfill,
+   * создастся ли сегодняшний и не закончилось ли расписание вовсе.
+   *
+   * Правая граница пропущенного — вхождение, с которого правило продолжится,
+   * и она не входит: сегодняшний платёж создастся в любом случае, и называть
+   * его пропущенным значило бы обещать на единицу больше, чем будет создано.
+   * Лимит одного прохода здесь не годится: число показывают пользователю.
    */
-  async countMissed(id: Id, today: IsoDate): Promise<number> {
+  async resumeInfo(id: Id, today: IsoDate): Promise<ResumeInfo> {
     const rule = await db.recurringTransactions.get(id)
-    if (!rule) return 0
+    if (!rule) return { missed: 0, dueToday: false, finished: false }
 
-    const dates = occurrencesBetween(rule, rule.nextOccurrence, today, MAX_BACKFILL_OCCURRENCES)
+    const resume = resumeOccurrence(rule, today)
+    // Расписание закончилось — пропущено всё несозданное до конца расписания
+    const until = resume ?? today
+
+    const dates = occurrencesBetween(rule, rule.nextOccurrence, until, MAX_BACKFILL_OCCURRENCES)
     const already = await generatedDatesOf(id)
-    return dates.filter((date) => !already.has(date)).length
+    const fresh = dates.filter((date) => !already.has(date))
+
+    return {
+      missed: resume === null ? fresh.length : fresh.filter((date) => date < resume).length,
+      // Если сегодняшний платёж уже создан, обещать его было бы неправдой
+      dueToday: resume === today && !already.has(today),
+      finished: resume === null,
+    }
   },
 
   /** Удаляет расписание. Уже созданные им операции остаются в истории. */

@@ -30,8 +30,10 @@ export interface RepairSummary {
   transactions: number
   /** Правила, у которых переписан счёт (все они выключены). */
   recurring: number
-  /** Записи — операции и правила, — у которых категория заменена на «Другое». */
+  /** Операции, у которых категория заменена на «Другое». */
   categories: number
+  /** Правила, у которых категория заменена на «Другое». Они остаются активными. */
+  recurringCategories: number
   /** Создавался ли «Восстановленный счёт» в этом запуске. */
   createdRecoveredAccount: boolean
 }
@@ -97,7 +99,13 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
   const categoryIds = new Set(categories.map((category) => category.id))
   const now = Date.now()
 
-  const summary: RepairSummary = { transactions: 0, recurring: 0, categories: 0, createdRecoveredAccount: false }
+  const summary: RepairSummary = {
+    transactions: 0,
+    recurring: 0,
+    categories: 0,
+    recurringCategories: 0,
+    createdRecoveredAccount: false,
+  }
 
   // Счёт создаём, только если есть что на него переносить
   const needsRecoveredAccount =
@@ -133,13 +141,14 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
     if (!fixed) continue
 
     // Правило с битым счётом выключаем: куда его направить, решает пользователь.
-    // Из-за одной лишь категории останавливать расписание не за что — «Другое» подходит
+    // Из-за одной лишь категории останавливать расписание не за что — «Другое» подходит.
+    // Оба поля правятся одной записью: повторный put сбросил бы первую правку
     await tx
       .table('recurringTransactions')
       .put(fixed.accountFixed ? { ...fixed.record, isActive: false } : fixed.record)
 
     if (fixed.accountFixed) summary.recurring += 1
-    if (fixed.categoryFixed) summary.categories += 1
+    if (fixed.categoryFixed) summary.recurringCategories += 1
   }
 
   return summary

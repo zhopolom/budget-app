@@ -6,6 +6,8 @@ import { useToast } from '../../components/Toast/toastContext'
 import { db } from '../../db/database'
 import { describeShareOutcome, exportBackupFile } from '../../features/backup/export'
 import { REMINDER_INTERVAL_DAYS, shouldRemindBackup, snoozeUntil } from '../../features/backup/reminder'
+import { usePreparedBackup } from '../../features/backup/usePreparedExport'
+import { recordDiagnostic } from '../../features/diagnostics/journal'
 import { settingsRepository } from '../../features/settings/repository'
 
 /**
@@ -16,6 +18,8 @@ import { settingsRepository } from '../../features/settings/repository'
 export function BackupReminderBanner() {
   const [busy, setBusy] = useState(false)
   const toast = useToast()
+  // Копия готовится заранее — иначе к моменту вызова share жест уже закончится
+  const backup = usePreparedBackup(__APP_VERSION__)
 
   // Момент времени берём здесь, а не в рендере: запрос пересчитывается сам,
   // когда меняются настройки или число операций
@@ -26,12 +30,17 @@ export function BackupReminderBanner() {
 
   if (!state?.remind) return null
 
+  // До вызова navigator.share внутри exportBackupFile не должно быть ни одного
+  // await: иначе Safari сочтёт жест законченным и шторку не откроет
   const save = async () => {
-    if (busy) return
+    if (busy || !backup) return
     setBusy(true)
     try {
-      const message = describeShareOutcome(await exportBackupFile(new Date(), __APP_VERSION__))
-      if (message) toast.show(message)
+      const outcome = await exportBackupFile(backup)
+      if (outcome === 'failed') recordDiagnostic('Копия: «Поделиться» не открылось')
+
+      const message = describeShareOutcome(outcome)
+      if (message) toast.show(message.text, { tone: message.tone })
     } catch (error) {
       toast.show(error instanceof Error ? error.message : 'Не удалось сохранить копию', { tone: 'error' })
     } finally {
@@ -55,8 +64,8 @@ export function BackupReminderBanner() {
       }
       actions={
         <>
-          <Button onClick={() => void save()} disabled={busy}>
-            Сохранить копию
+          <Button onClick={() => void save()} disabled={busy || !backup}>
+            {backup ? 'Сохранить копию' : 'Готовлю копию…'}
           </Button>
           <Button variant="secondary" onClick={() => void later()} disabled={busy}>
             Позже

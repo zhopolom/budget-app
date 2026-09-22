@@ -57,6 +57,9 @@ export function RecurringPage() {
   /**
    * Включение спрашивает про пропущенное. По умолчанию пауза означает, что
    * платежей за это время не было, поэтому «Не создавать» — основной ответ.
+   *
+   * Сегодняшний платёж в число пропущенных не входит и создаётся в любом
+   * случае: пауза кончилась, и он не пропущен, а наступил.
    */
   const toggleActive = async (recurring: RecurringTransaction) => {
     if (recurring.isActive) {
@@ -65,14 +68,33 @@ export function RecurringPage() {
       return
     }
 
-    const missed = await recurringRepository.countMissed(recurring.id, today)
+    const info = await recurringRepository.resumeInfo(recurring.id, today)
+    const payments = (count: number) => `${count} ${pluralRu(count, ['платёж', 'платежа', 'платежей'])}`
+
+    // Возобновлять нечего и досоздавать нечего — остаётся поправить расписание
+    if (info.finished && info.missed === 0) {
+      toast.show('Расписание уже закончилось — измените дату окончания', { tone: 'error' })
+      return
+    }
+
     let backfill = false
 
-    if (missed > 0) {
+    if (info.finished) {
       backfill = await confirm({
-        title: `За время паузы пропущено ${missed} ${pluralRu(missed, ['платёж', 'платежа', 'платежей'])}`,
-        message: 'Создать их сейчас или продолжить со следующего по расписанию?',
-        confirmLabel: `Создать ${missed}`,
+        title: 'Расписание уже закончилось',
+        message: `Создать ${payments(info.missed)}, которые не успели записаться?`,
+        confirmLabel: `Создать ${info.missed}`,
+        cancelLabel: 'Не создавать',
+      })
+      // Отказ оставляет правило выключенным: включать закончившееся некуда
+      if (!backfill) return
+    } else if (info.missed > 0) {
+      backfill = await confirm({
+        title: `За время паузы пропущено ${payments(info.missed)}`,
+        message: info.dueToday
+          ? 'Создать их сейчас или продолжить со следующего по расписанию? Сегодняшний платёж будет создан в любом случае.'
+          : 'Создать их сейчас или продолжить со следующего по расписанию?',
+        confirmLabel: `Создать ${info.missed}`,
         cancelLabel: 'Не создавать',
       })
     }
@@ -81,11 +103,11 @@ export function RecurringPage() {
       // Досоздание происходит здесь же, поэтому в тосте настоящее число,
       // а не обещание: перезапускать приложение не нужно
       const created = await recurringRepository.setActive(recurring.id, true, today, { backfill })
-      toast.show(
-        created > 0
-          ? `Создано ${created} ${pluralRu(created, ['платёж', 'платежа', 'платежей'])}`
-          : 'Регулярная операция включена',
-      )
+      if (created === 0) {
+        toast.show('Регулярная операция включена')
+      } else {
+        toast.show(`Создано ${payments(created)}${info.finished ? ', расписание закончилось' : ''}`)
+      }
     } catch (error) {
       toast.show(error instanceof Error ? error.message : 'Не удалось включить', { tone: 'error' })
     }

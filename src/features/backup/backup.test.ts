@@ -379,6 +379,36 @@ describe('регулярные переводы в копии', () => {
     expect(result.ok).toBe(true)
     expect(result.ok && result.danglingReferences).toBe(1)
   })
+
+  it('битая категория у правила тоже считается битой ссылкой', () => {
+    // Предупреждение перед восстановлением должно называть верное число:
+    // такое правило ремонт тоже трогает
+    const dangling = {
+      accounts: ACCOUNTS,
+      categories: CATEGORIES,
+      transactions: [],
+      recurringTransactions: [
+        {
+          id: 'r',
+          type: 'expense',
+          amount: 19_900,
+          accountId: 'card',
+          categoryId: 'ghost',
+          frequency: 'monthly',
+          interval: 1,
+          startDate: '2026-09-14',
+          nextOccurrence: '2026-10-14',
+          isActive: true,
+        },
+      ],
+      settings: { id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: 'card' },
+    }
+    const result = parseBackup(
+      JSON.stringify({ app: 'budget', schemaVersion: 3, exportDate: '2026-09-21T00:00:00.000Z', data: dangling }),
+    )
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.danglingReferences).toBe(1)
+  })
 })
 
 describe('импорт копии v0.2', () => {

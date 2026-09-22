@@ -3,17 +3,14 @@ import { useRef, useState } from 'react'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { useConfirm } from '../../components/Confirm/confirmContext'
 import { useToast } from '../../components/Toast/toastContext'
-import { toCsv, UTF8_BOM } from '../../features/backup/csv'
 import { describeShareOutcome, exportBackupFile } from '../../features/backup/export'
 import { backupFileName, countBackup, type BackupCounts } from '../../features/backup/format'
 import { parseBackup } from '../../features/backup/parse'
 import { describeLastBackup } from '../../features/backup/reminder'
 import { resetAllData, restoreBackup } from '../../features/backup/repository'
-import { accountsRepository } from '../../features/accounts/repository'
-import { categoriesRepository } from '../../features/categories/repository'
+import { usePreparedBackup, usePreparedCsv } from '../../features/backup/usePreparedExport'
+import { recordDiagnostic } from '../../features/diagnostics/journal'
 import { settingsRepository } from '../../features/settings/repository'
-import { transactionsRepository } from '../../features/transactions/repository'
-import { toTransactionViews } from '../../features/transactions/views'
 import { readFileAsText, shareOrDownloadTextFile } from '../../utils/download'
 import { pluralRu } from '../../utils/plural'
 import styles from './SettingsPage.module.css'
@@ -27,6 +24,10 @@ export function DataSection() {
     async () => describeLastBackup((await settingsRepository.get()).lastBackupAt, Date.now()),
     [],
   )
+  // Файлы собраны заранее: navigator.share на iOS принимается только пока
+  // жив жест пользователя, а сборка — это чтение базы, то есть пауза
+  const backup = usePreparedBackup(__APP_VERSION__)
+  const csv = usePreparedCsv()
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return
@@ -40,34 +41,40 @@ export function DataSection() {
     }
   }
 
-  const saveBackup = () =>
-    run(async () => {
-      const message = describeShareOutcome(await exportBackupFile(new Date(), __APP_VERSION__))
-      if (message) toast.show(message)
+  // Обработчик не async до самой отдачи файла: между нажатием и
+  // navigator.share не должно быть ни одного await
+  const saveBackup = () => {
+    if (busy || !backup) return
+    void run(async () => {
+      const outcome = await exportBackupFile(backup)
+      if (outcome === 'failed') recordDiagnostic('Копия: «Поделиться» не открылось')
+
+      const message = describeShareOutcome(outcome)
+      if (message) toast.show(message.text, { tone: message.tone })
     })
+  }
 
-  const exportCsv = () =>
-    run(async () => {
-      const [transactions, categories, accounts, settings] = await Promise.all([
-        transactionsRepository.listAll(),
-        categoriesRepository.listAll(),
-        accountsRepository.listAll(),
-        settingsRepository.get(),
-      ])
+  const exportCsv = () => {
+    if (busy || !csv) return
+    if (csv.transactions === 0) {
+      toast.show('Операций пока нет', { tone: 'error' })
+      return
+    }
 
-      if (transactions.length === 0) {
-        toast.show('Операций пока нет', { tone: 'error' })
-        return
+    void run(async () => {
+      const outcome = await shareOrDownloadTextFile(
+        csv.content,
+        backupFileName(csv.preparedAt, 'csv'),
+        'text/csv',
+      )
+      if (outcome === 'shared') toast.show('Таблица отправлена')
+      else if (outcome === 'downloaded') toast.show('CSV скачан')
+      else if (outcome === 'failed') {
+        recordDiagnostic('CSV: «Поделиться» не открылось')
+        toast.show('Не удалось открыть «Поделиться». Попробуйте ещё раз', { tone: 'error' })
       }
-
-      // По возрастанию даты: так таблицу читают как журнал операций
-      const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
-      const csv = UTF8_BOM + toCsv(toTransactionViews(sorted, categories, accounts), settings.baseCurrency)
-
-      const outcome = await shareOrDownloadTextFile(csv, backupFileName(new Date(), 'csv'), 'text/csv')
-      if (outcome === 'shared') toast.show('Таблица готова — выберите, куда сохранить')
-      else if (outcome === 'downloaded') toast.show('CSV выгружен')
     })
+  }
 
   const pickFile = () => {
     if (busy) return
@@ -142,13 +149,24 @@ export function DataSection() {
           <ListRow icon="🗓️" title="Последняя копия" value={lastBackup} />
         </ListItem>
         <ListItem>
-          <ListRow icon="💾" title="Сохранить копию" subtitle="JSON со всеми данными" onClick={saveBackup} />
+          {/* Пока файл не собран, строка не нажимается: на реальных объёмах это доли секунды */}
+          <ListRow
+            icon="💾"
+            title="Сохранить копию"
+            subtitle={backup ? 'JSON со всеми данными' : 'Готовлю копию…'}
+            onClick={backup ? saveBackup : undefined}
+          />
         </ListItem>
         <ListItem>
           <ListRow icon="📥" title="Восстановить из копии" subtitle="Заменит данные на устройстве" onClick={pickFile} />
         </ListItem>
         <ListItem>
-          <ListRow icon="📄" title="Экспорт в CSV" subtitle="Операции для таблиц" onClick={exportCsv} />
+          <ListRow
+            icon="📄"
+            title="Экспорт в CSV"
+            subtitle={csv ? 'Операции для таблиц' : 'Готовлю таблицу…'}
+            onClick={csv ? exportCsv : undefined}
+          />
         </ListItem>
         <ListItem>
           <ListRow icon="🗑️" title="Удалить все данные" onClick={reset} />
