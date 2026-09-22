@@ -147,6 +147,7 @@ export function AccountPage() {
               {sheet === 'delete' && overview && (
                 <DeleteAccountPanel
                   account={account}
+                  balance={data.balance}
                   candidates={transferCandidates(account, overview.items)}
                   currency={data.currency}
                   onCancel={() => setSheet('edit')}

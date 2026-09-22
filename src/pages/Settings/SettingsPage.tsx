@@ -52,6 +52,9 @@ export function SettingsPage() {
             <ListRow icon="🎯" title="Бюджет и лимиты" chevron onClick={() => navigate('/budgets')} />
           </ListItem>
           <ListItem>
+            <ListRow icon="🏁" title="Цели накоплений" chevron onClick={() => navigate('/goals')} />
+          </ListItem>
+          <ListItem>
             <ListRow icon="💳" title="Счета" chevron onClick={() => navigate('/accounts')} />
           </ListItem>
           <ListItem>
