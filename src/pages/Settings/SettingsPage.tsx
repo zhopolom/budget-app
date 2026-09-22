@@ -69,6 +69,9 @@ export function SettingsPage() {
           <ListItem>
             <ListRow icon="🔁" title="Регулярные операции" chevron onClick={() => navigate('/recurring')} />
           </ListItem>
+          <ListItem>
+            <ListRow icon="🏷️" title="Правила категорий" chevron onClick={() => navigate('/rules')} />
+          </ListItem>
         </ListCard>
       </section>
 

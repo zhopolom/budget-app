@@ -11,6 +11,7 @@ import { DashboardPage } from '../pages/Dashboard/DashboardPage'
 import { EditTransactionPage } from '../pages/EditTransaction/EditTransactionPage'
 import { GoalsPage } from '../pages/Goals/GoalsPage'
 import { RecurringPage } from '../pages/Recurring/RecurringPage'
+import { RulesPage } from '../pages/Rules/RulesPage'
 import { SettingsPage } from '../pages/Settings/SettingsPage'
 import { TransactionsPage } from '../pages/Transactions/TransactionsPage'
 import { AppLayout } from './AppLayout'
@@ -29,6 +30,7 @@ const TAB_ROUTES: Record<string, ComponentType> = {
   '/budgets': BudgetsPage,
   '/recurring': RecurringPage,
   '/goals': GoalsPage,
+  '/rules': RulesPage,
 }
 
 /** Полноэкранные экраны без нижней навигации. */

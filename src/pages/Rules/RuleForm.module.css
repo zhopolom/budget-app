@@ -1,0 +1,76 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.sectionTitle {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.preview {
+  padding: 0 2px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.hint {
+  align-self: end;
+  padding-bottom: 12px;
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--ink-2);
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 44px;
+}
+
+.checkbox {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.toggleTitle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.error {
+  font-size: 14px;
+  color: var(--negative);
+}
+
+.actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
