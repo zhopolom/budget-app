@@ -167,6 +167,7 @@ describe('calculateAccountActivity', () => {
       expense: Money.fromMajor(100),
       transferOut: Money.fromMajor(300),
       transferIn: Money.fromMajor(50),
+      adjustment: 0,
       count: 4,
     })
   })
