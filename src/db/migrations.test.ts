@@ -109,7 +109,11 @@ describe('миграция v1 → v2', () => {
     const upgraded = await openUpgraded()
 
     expect(await upgraded.accounts.toArray()).toEqual([V1_ACCOUNT])
-    expect(await upgraded.categories.toArray()).toEqual([V1_CATEGORY])
+    // Категория v1 на месте; недостающие системные категории добавлены с 0.3.2,
+    // потому что без «Другого» ремонту битых категорий нечем чинить
+    const categories = await upgraded.categories.toArray()
+    expect(categories.find((category) => category.id === V1_CATEGORY.id)).toEqual(V1_CATEGORY)
+    expect(categories.some((category) => category.id === 'cat-exp-other')).toBe(true)
     expect((await upgraded.transactions.toArray()).sort((a, b) => a.id.localeCompare(b.id))).toEqual(V1_TRANSACTIONS)
     expect((await upgraded.settings.get('app'))?.lastAccountId).toBe(V1_ACCOUNT.id)
 

@@ -8,10 +8,13 @@ import type {
   Transaction,
 } from '../../types/entities'
 import { isValidIsoDate } from '../../utils/dates'
-import { MAX_AMOUNT } from '../../utils/money'
+import { isNonNegativeMoneyAmount, isPositiveMoneyAmount } from '../../utils/money'
 import { categoryBudgetIdFor } from '../budgets/ids'
+import { MAX_RECURRING_INTERVAL } from '../recurring/occurrences'
 import { createDefaultSettings } from '../settings/defaults'
 import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData } from './format'
+import { normalizeBackup, type NormalizationSummary } from './normalize'
+import { validateBackup } from './validate'
 
 /**
  * Разбор файла резервной копии.
@@ -27,13 +30,21 @@ import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData } from './format'
 export type ParseBackupResult =
   | {
       ok: true
+      /** Уже нормализованные данные: их можно отдавать restoreBackup как есть. */
       data: BackupData
       schemaVersion: number
       danglingReferences: number
+      /** Что изменила нормализация — пользователь видит это до восстановления. */
+      normalization: NormalizationSummary
       /** Когда копия была снята. null — в файле не было разборчивой даты. */
       exportedAt: number | null
     }
-  | { ok: false; error: string }
+  | {
+      ok: false
+      error: string
+      /** Технические подробности без финансовых данных — для консоли разработчика. */
+      details?: string[]
+    }
 
 type Unknown = Record<string, unknown>
 
@@ -43,8 +54,6 @@ const isObject = (value: unknown): value is Unknown =>
 const isId = (value: unknown): value is string => typeof value === 'string' && value.length > 0
 const isText = (value: unknown): value is string => typeof value === 'string'
 const isTimestamp = (value: unknown): value is number => typeof value === 'number' && Number.isFinite(value)
-const isAmount = (value: unknown): value is number =>
-  typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_AMOUNT
 const isDate = (value: unknown): value is string => typeof value === 'string' && isValidIsoDate(value)
 
 const CURRENCIES = new Set(['UAH', 'USD', 'EUR', 'PLN'])
@@ -57,14 +66,17 @@ function parseAccount(value: unknown): Account | null {
   if (!isObject(value)) return null
   const { id, name, type, initialBalance, currency, createdAt, updatedAt } = value
   if (!isId(id) || !isText(name) || typeof type !== 'string' || !ACCOUNT_TYPES.has(type)) return null
-  if (!Number.isSafeInteger(initialBalance) || typeof currency !== 'string' || !CURRENCIES.has(currency)) return null
+  // Отрицательный начальный остаток модель не поддерживает: форма правки взяла бы
+  // модуль и при сохранении перевернула бы знак — тихо изменив баланс
+  if (!isNonNegativeMoneyAmount(initialBalance)) return null
+  if (typeof currency !== 'string' || !CURRENCIES.has(currency)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
   return {
     id,
     name,
     type: type as Account['type'],
-    initialBalance: initialBalance as number,
+    initialBalance,
     currency: currency as Account['currency'],
     createdAt: stamp,
     updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
@@ -90,12 +102,12 @@ function parseCategory(value: unknown): Category | null {
 function parseTransaction(value: unknown): Transaction | null {
   if (!isObject(value)) return null
   const { id, type, amount, date, note, createdAt, updatedAt, recurringId, occurrenceDate } = value
-  if (!isId(id) || !isAmount(amount) || !isDate(date)) return null
+  if (!isId(id) || !isPositiveMoneyAmount(amount) || !isDate(date)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
   const base = {
     id,
-    amount: amount as number,
+    amount,
     date: date as string,
     note: isText(note) ? note : '',
     createdAt: stamp,
@@ -124,8 +136,8 @@ function parseTransaction(value: unknown): Transaction | null {
 function parseBudget(value: unknown): Budget | null {
   if (!isObject(value)) return null
   const { id, month, year, totalLimit } = value
-  if (!isId(id) || !isMonth(month) || !isYear(year) || !Number.isSafeInteger(totalLimit)) return null
-  return { id, month: month as number, year: year as number, totalLimit: totalLimit as number }
+  if (!isId(id) || !isMonth(month) || !isYear(year) || !isPositiveMoneyAmount(totalLimit)) return null
+  return { id, month: month as number, year: year as number, totalLimit }
 }
 
 const isMonth = (value: unknown): value is number =>
@@ -138,7 +150,7 @@ function parseCategoryBudget(value: unknown): CategoryBudget | null {
   if (!isObject(value)) return null
   const { id, categoryId, month, year, limitAmount, createdAt, updatedAt } = value
   if (!isId(id) || !isId(categoryId) || !isMonth(month) || !isYear(year)) return null
-  if (!Number.isSafeInteger(limitAmount) || (limitAmount as number) <= 0) return null
+  if (!isPositiveMoneyAmount(limitAmount)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
   return {
@@ -146,7 +158,7 @@ function parseCategoryBudget(value: unknown): CategoryBudget | null {
     categoryId,
     month: month as number,
     year: year as number,
-    limitAmount: limitAmount as number,
+    limitAmount,
     createdAt: stamp,
     updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
   }
@@ -157,15 +169,18 @@ function parseRecurring(value: unknown): RecurringTransaction | null {
   const { id, type, amount, note, frequency, interval } = value
   const { startDate, nextOccurrence, endDate, isActive, lastGeneratedAt, createdAt, updatedAt } = value
 
-  if (!isId(id) || !isAmount(amount)) return null
+  if (!isId(id) || !isPositiveMoneyAmount(amount)) return null
   if (typeof frequency !== 'string' || !FREQUENCIES.has(frequency)) return null
-  if (!Number.isInteger(interval) || (interval as number) < 1) return null
+  // Та же граница, что и в форме: шаг в миллиард уронил бы арифметику дат
+  if (!Number.isInteger(interval) || (interval as number) < 1 || (interval as number) > MAX_RECURRING_INTERVAL) {
+    return null
+  }
   if (!isDate(startDate) || !isDate(nextOccurrence)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
   const base = {
     id,
-    amount: amount as number,
+    amount,
     note: isText(note) ? note : '',
     frequency: frequency as RecurringTransaction['frequency'],
     interval: interval as number,
@@ -182,6 +197,9 @@ function parseRecurring(value: unknown): RecurringTransaction | null {
   if (type === 'transfer') {
     const { fromAccountId, toAccountId } = value
     if (!isId(fromAccountId) || !isId(toAccountId)) return null
+    // Перевод внутри одного счёта приложение выключает и включить не даёт:
+    // активным такое правило может быть только в отредактированном файле
+    if (fromAccountId === toAccountId && base.isActive) return null
     return { ...base, type: 'transfer', fromAccountId, toAccountId }
   }
 
@@ -237,7 +255,7 @@ function migrateLegacyCategoryLimits(budgets: readonly unknown[]): CategoryBudge
 
     for (const legacy of budget.categoryLimits) {
       if (!isObject(legacy) || !isId(legacy.categoryId)) continue
-      if (!Number.isSafeInteger(legacy.limit) || (legacy.limit as number) <= 0) continue
+      if (!isPositiveMoneyAmount(legacy.limit)) continue
 
       const ym = { year: budget.year, month: budget.month }
       moved.push({
@@ -245,7 +263,7 @@ function migrateLegacyCategoryLimits(budgets: readonly unknown[]): CategoryBudge
         categoryId: legacy.categoryId,
         year: budget.year,
         month: budget.month,
-        limitAmount: legacy.limit as number,
+        limitAmount: legacy.limit,
         createdAt: now,
         updatedAt: now,
       })
@@ -309,24 +327,34 @@ export function parseBackup(text: string): ParseBackupResult {
   const recurringTransactions = parseList(source.recurringTransactions, parseRecurring, 'регулярные операции')
   if (typeof recurringTransactions === 'string') return { ok: false, error: recurringTransactions }
 
-  // Копия v1 лимитов категорий ещё не знала — достаём их из бюджетов
+  // Копия v1 лимитов категорий ещё не знала — достаём их из бюджетов.
+  // Дубли не схлопываем: их найдёт validateBackup и откажет от файла целиком
   const legacyLimits = schemaVersion < 2 ? migrateLegacyCategoryLimits(budgetsRaw) : []
-  const byId = new Map(categoryBudgets.map((limit) => [limit.id, limit]))
-  for (const limit of legacyLimits) if (!byId.has(limit.id)) byId.set(limit.id, limit)
 
-  const data: BackupData = {
+  const parsed: BackupData = {
     accounts,
     categories,
     transactions,
     budgets,
-    categoryBudgets: [...byId.values()],
+    categoryBudgets: [...categoryBudgets, ...legacyLimits],
     recurringTransactions,
     settings: parseSettings(source.settings),
   }
 
-  if (data.accounts.length === 0 && data.transactions.length === 0) {
+  if (parsed.accounts.length === 0 && parsed.transactions.length === 0) {
     return { ok: false, error: 'В копии нет ни счетов, ни операций' }
   }
+
+  // Порядок важен: сначала уникальность и ссылки на сырых данных, потом
+  // миграция в памяти, потом та же проверка ещё раз — миграция не должна
+  // иметь возможности внести то, что мы только что отвергли
+  const rawCheck = validateBackup(parsed)
+  if (!rawCheck.ok) return { ok: false, error: rawCheck.error, details: rawCheck.details }
+
+  const { data, summary } = normalizeBackup(parsed)
+
+  const normalizedCheck = validateBackup(data)
+  if (!normalizedCheck.ok) return { ok: false, error: normalizedCheck.error, details: normalizedCheck.details }
 
   const exported = typeof raw.exportDate === 'string' ? Date.parse(raw.exportDate) : Number.NaN
 
@@ -335,6 +363,7 @@ export function parseBackup(text: string): ParseBackupResult {
     data,
     schemaVersion,
     danglingReferences: countDangling(data),
+    normalization: summary,
     exportedAt: Number.isFinite(exported) ? exported : null,
   }
 }

@@ -1,5 +1,5 @@
 import type { Transaction as DexieTransaction } from 'dexie'
-import { SYSTEM_CATEGORY_IDS } from '../features/categories/defaults'
+import { createDefaultCategories, SYSTEM_CATEGORY_IDS } from '../features/categories/defaults'
 import type {
   Account,
   AppSettings,
@@ -36,6 +36,8 @@ export interface RepairSummary {
   recurringCategories: number
   /** Создавался ли «Восстановленный счёт» в этом запуске. */
   createdRecoveredAccount: boolean
+  /** Системные категории, которых не хватало и которые созданы заново. */
+  systemCategories: number
 }
 
 type Record = Transaction | RecurringTransaction
@@ -87,6 +89,18 @@ function repairRecord<T extends Record>(
   return accountFixed || categoryFixed ? { record, accountFixed, categoryFixed } : null
 }
 
+/**
+ * Системные категории обязаны существовать всегда: на «Другое» опирается
+ * ремонт битых категорий, а копия старой версии или чужой файл могли их
+ * не содержать. Добавляем только недостающие, по стабильным id — дублей
+ * не будет, повторный вызов ничего не сделает.
+ */
+async function ensureSystemCategories(tx: DexieTransaction, existing: ReadonlySet<Id>, now: number): Promise<number> {
+  const missing = createDefaultCategories(now).filter((category) => !existing.has(category.id))
+  if (missing.length > 0) await tx.table('categories').bulkAdd(missing)
+  return missing.length
+}
+
 export async function repairDanglingReferences(tx: DexieTransaction): Promise<RepairSummary> {
   const [accounts, categories, transactions, rules] = await Promise.all([
     tx.table('accounts').toArray() as Promise<Account[]>,
@@ -105,7 +119,12 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
     categories: 0,
     recurringCategories: 0,
     createdRecoveredAccount: false,
+    systemCategories: 0,
   }
+
+  // Сначала категории: без «Другого» чинить битые категории было бы нечем
+  summary.systemCategories = await ensureSystemCategories(tx, categoryIds, now)
+  for (const id of Object.values(SYSTEM_CATEGORY_IDS)) categoryIds.add(id)
 
   // Счёт создаём, только если есть что на него переносить
   const needsRecoveredAccount =

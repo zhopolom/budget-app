@@ -5,6 +5,7 @@ import { useConfirm } from '../../components/Confirm/confirmContext'
 import { useToast } from '../../components/Toast/toastContext'
 import { describeShareOutcome, exportBackupFile } from '../../features/backup/export'
 import { backupFileName, countBackup, type BackupCounts } from '../../features/backup/format'
+import type { NormalizationSummary } from '../../features/backup/normalize'
 import { parseBackup } from '../../features/backup/parse'
 import { describeLastBackup } from '../../features/backup/reminder'
 import { resetAllData, restoreBackup } from '../../features/backup/repository'
@@ -86,6 +87,9 @@ export function DataSection() {
     const parsed = parseBackup(text)
 
     if (!parsed.ok) {
+      // Подробности — только разработчику: в них id записей, но не суммы и не заметки
+      if (parsed.details && import.meta.env.DEV) console.warn('Резервная копия отклонена:', parsed.details)
+      if (parsed.details) recordDiagnostic(`Копия отклонена: ${parsed.error} (${parsed.details.length})`)
       toast.show(parsed.error, { tone: 'error' })
       return
     }
@@ -96,6 +100,7 @@ export function DataSection() {
       message:
         `${describeCounts(counts)}. Текущие данные на устройстве будут заменены.` +
         (parsed.schemaVersion < 2 ? ' Копия старого формата будет обновлена автоматически.' : '') +
+        describeNormalization(parsed.normalization) +
         (parsed.danglingReferences > 0
           ? ` В копии ${parsed.danglingReferences} ${pluralRu(parsed.danglingReferences, ['запись ссылается', 'записи ссылаются', 'записей ссылаются'])} на удалённые счета или категории. Они не потеряются: операции переедут на «Восстановленный счёт», а регулярные платежи переедут туда же и будут выключены.`
           : ''),
@@ -191,6 +196,21 @@ export function DataSection() {
       />
     </section>
   )
+}
+
+/**
+ * Что нормализация поменяет в копии. Говорим об этом до восстановления:
+ * молча менять данные нельзя, даже когда это только код валюты.
+ */
+function describeNormalization({ currencies, lastAccountReset }: NormalizationSummary): string {
+  const parts: string[] = []
+  if (currencies > 0) {
+    parts.push(
+      ` У ${currencies} ${pluralRu(currencies, ['счёта', 'счетов', 'счетов'])} валюта отличается от основной — она будет заменена на основную. Суммы не пересчитываются: курсов у приложения нет.`,
+    )
+  }
+  if (lastAccountReset) parts.push(' Счёт по умолчанию для новых операций будет выбран заново.')
+  return parts.join('')
 }
 
 function describeCounts({ accounts, categories, transactions, recurringTransactions }: BackupCounts): string {

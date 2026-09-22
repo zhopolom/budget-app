@@ -3,6 +3,7 @@ import { repairDanglingReferences, type RepairSummary } from '../../db/repair'
 import { SETTINGS_ID } from '../settings/defaults'
 import { settingsRepository } from '../settings/repository'
 import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData, type BackupFile } from './format'
+import { validateBackup } from './validate'
 
 /** Все таблицы разом: копия должна быть согласованным снимком, а не склейкой чтений. */
 export async function createBackup(exportDate: Date, appVersion: string): Promise<BackupFile> {
@@ -42,10 +43,16 @@ export function serializeBackup(backup: BackupFile): string {
  * Восстановление заменяет данные целиком, а не дописывает к текущим:
  * слияние двух историй операций дало бы дубли, которые потом не развести.
  *
- * Всё в одной транзакции Dexie — оборванное восстановление не оставит
- * половину старых данных вперемешку с половиной новых.
+ * Данные приходят уже разобранными и нормализованными (parseBackup), но
+ * уникальность проверяется ещё раз до открытия транзакции: это последняя
+ * линия обороны, и она стоит дёшево. Дальше всё в одной транзакции Dexie —
+ * оборванное восстановление не оставит половину старых данных вперемешку
+ * с половиной новых, а упавшее не тронет их вовсе.
  */
 export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
+  const check = validateBackup(data)
+  if (!check.ok) throw new Error(check.error)
+
   return db.transaction(
     'rw',
     [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],

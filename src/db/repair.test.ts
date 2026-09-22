@@ -228,6 +228,7 @@ describe('повторный ремонт', () => {
       categories: 0,
       recurringCategories: 0,
       createdRecoveredAccount: false,
+      systemCategories: 0,
     })
     expect(await upgraded.accounts.toArray()).toEqual(before.accounts)
     expect(await upgraded.transactions.toArray()).toEqual(before.transactions)
