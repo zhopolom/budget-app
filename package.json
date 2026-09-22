@@ -1,7 +1,7 @@
 {
   "name": "budget",
   "private": true,
-  "version": "0.3.1",
+  "version": "0.3.2",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "e2e": "playwright test",
-    "e2e:chromium": "playwright test --project=chromium"
+    "e2e:chromium": "playwright test --project=chromium",
+    "bench": "vitest run --config vitest.bench.config.ts"
   },
   "dependencies": {
     "date-fns": "^4.4.0",
