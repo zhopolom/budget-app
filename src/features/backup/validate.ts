@@ -46,6 +46,7 @@ function findDuplicates(data: BackupData): string[] {
   report('budgets.id', data.budgets.map((item) => item.id))
   report('categoryBudgets.id', data.categoryBudgets.map((item) => item.id))
   report('recurringTransactions.id', data.recurringTransactions.map((item) => item.id))
+  report('pendingOccurrences.id', data.pendingOccurrences.map((item) => item.id))
 
   // Составные уникальные индексы базы: один бюджет на месяц, один лимит на
   // категорию в месяц, одна операция на вхождение расписания
@@ -59,6 +60,10 @@ function findDuplicates(data: BackupData): string[] {
     data.transactions
       .filter((item) => item.recurringId !== undefined && item.occurrenceDate !== undefined)
       .map((item) => `${item.recurringId}@${item.occurrenceDate}`),
+  )
+  report(
+    'pendingOccurrences[recurringId+scheduledDate]',
+    data.pendingOccurrences.map((item) => `${item.recurringId}@${item.scheduledDate}`),
   )
 
   return details

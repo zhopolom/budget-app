@@ -1,4 +1,11 @@
-import type { Account, IsoDate, MinorUnits, RecurringTransaction, Transaction } from '../../types/entities'
+import type {
+  Account,
+  IsoDate,
+  MinorUnits,
+  PendingOccurrence,
+  RecurringTransaction,
+  Transaction,
+} from '../../types/entities'
 import { daysInMonth, monthDateRange, yearMonthOf } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { isSelfTransferRule } from '../recurring/model'
@@ -82,6 +89,11 @@ export interface ForecastInput {
   /** Весь ledger: баланс считается по всей истории. */
   transactions: readonly Transaction[]
   rules: readonly RecurringTransaction[]
+  /**
+   * Вхождения в режиме подтверждения со статусом pending. Считаются ожидаемыми
+   * (ТЗ §26): срок уже наступил, и решение скорее всего будет «подтвердить».
+   */
+  pending?: readonly PendingOccurrence[]
   /** Общий бюджет текущего месяца; null — не задан. */
   monthlyLimit: MinorUnits | null
 }
@@ -98,8 +110,14 @@ export interface Forecast {
   expectedExpense: MinorUnits
   /** currentBalance + expectedIncome − expectedExpense. Переводы капитал не меняют и сюда не входят. */
   projectedBalance: MinorUnits
-  /** Сколько регулярных доходов и расходов учтено. 0 — прогноз равен текущему балансу. */
+  /** Сколько регулярных доходов и расходов учтено, включая ожидающие подтверждения. */
   scheduledCount: number
+  /** Часть expectedIncome, которая ждёт подтверждения. */
+  pendingIncome: MinorUnits
+  /** Часть expectedExpense, которая ждёт подтверждения. */
+  pendingExpense: MinorUnits
+  /** Сколько вхождений ждут подтверждения: интерфейс показывает их отдельно. */
+  pendingCount: number
   /** Ориентир по бюджету; null — общий бюджет месяца не задан. */
   guidance: DailyGuidance | null
 }
@@ -109,7 +127,14 @@ export interface Forecast {
  * и бюджет (ТЗ §20). Корректировки уже сидят в текущем балансе, а в ожидаемых
  * суммах их нет: сверка — не событие, которое повторяется по расписанию.
  */
-export function calculateForecast({ today, accounts, transactions, rules, monthlyLimit }: ForecastInput): Forecast {
+export function calculateForecast({
+  today,
+  accounts,
+  transactions,
+  rules,
+  pending = [],
+  monthlyLimit,
+}: ForecastInput): Forecast {
   const { start, end } = monthDateRange(yearMonthOf(today))
 
   let expectedIncome = 0
@@ -122,6 +147,23 @@ export function calculateForecast({ today, accounts, transactions, rules, monthl
     scheduledCount += 1
   }
 
+  // Ожидающие подтверждения: срок уже наступил, операции ещё нет — но она ожидается.
+  // Вхождения удалённых расписаний пропускаем: суммы у них больше нет
+  const ruleById = new Map(rules.map((rule) => [rule.id, rule]))
+  let pendingIncome = 0
+  let pendingExpense = 0
+  let pendingCount = 0
+  for (const occurrence of pending) {
+    const rule = occurrence.status === 'pending' ? ruleById.get(occurrence.recurringId) : undefined
+    if (!rule || rule.type === 'transfer') continue
+    if (rule.type === 'income') pendingIncome = Money.add(pendingIncome, rule.amount)
+    else pendingExpense = Money.add(pendingExpense, rule.amount)
+    pendingCount += 1
+  }
+  expectedIncome = Money.add(expectedIncome, pendingIncome)
+  expectedExpense = Money.add(expectedExpense, pendingExpense)
+  scheduledCount += pendingCount
+
   const currentBalance = calculateTotalBalance(accounts, transactions)
   const spent = calculateTotals(transactions.filter((item) => item.date >= start && item.date <= end)).expense
 
@@ -133,6 +175,9 @@ export function calculateForecast({ today, accounts, transactions, rules, monthl
     expectedExpense,
     projectedBalance: Money.subtract(Money.add(currentBalance, expectedIncome), expectedExpense),
     scheduledCount,
+    pendingIncome,
+    pendingExpense,
+    pendingCount,
     guidance: monthlyLimit === null ? null : calculateDailyGuidance(monthlyLimit, spent, today),
   }
 }

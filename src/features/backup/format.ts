@@ -4,6 +4,7 @@ import type {
   Budget,
   Category,
   CategoryBudget,
+  PendingOccurrence,
   RecurringTransaction,
   Transaction,
 } from '../../types/entities'
@@ -14,8 +15,12 @@ import type {
  *
  * v3 добавила регулярные переводы. Новых таблиц нет, поэтому копии v2
  * читаются как есть — разбор правила просто не встретит type: 'transfer'.
+ *
+ * v4 добавила корректировки остатка, режим подтверждения у расписаний
+ * и таблицу ожидающих вхождений. Старые копии читаются: у их правил
+ * режим automatic, а раздел pendingOccurrences просто пуст.
  */
-export const BACKUP_SCHEMA_VERSION = 3
+export const BACKUP_SCHEMA_VERSION = 4
 
 /** Метка приложения: чтобы не пытаться восстановиться из чужого JSON. */
 export const BACKUP_APP = 'budget'
@@ -27,6 +32,7 @@ export interface BackupData {
   budgets: Budget[]
   categoryBudgets: CategoryBudget[]
   recurringTransactions: RecurringTransaction[]
+  pendingOccurrences: PendingOccurrence[]
   settings: AppSettings
 }
 
@@ -47,6 +53,7 @@ export interface BackupCounts {
   budgets: number
   categoryBudgets: number
   recurringTransactions: number
+  pendingOccurrences: number
 }
 
 export function countBackup(data: BackupData): BackupCounts {
@@ -57,6 +64,7 @@ export function countBackup(data: BackupData): BackupCounts {
     budgets: data.budgets.length,
     categoryBudgets: data.categoryBudgets.length,
     recurringTransactions: data.recurringTransactions.length,
+    pendingOccurrences: data.pendingOccurrences.length,
   }
 }
 

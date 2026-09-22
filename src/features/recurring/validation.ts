@@ -5,6 +5,7 @@ import type {
   IsoDate,
   ManualTransactionType,
   RecurrenceFrequency,
+  RecurringExecutionMode,
   RecurringTransaction,
 } from '../../types/entities'
 import type { ValidationResult } from '../../types/validation'
@@ -38,6 +39,7 @@ export interface RecurringDraft {
   startDate: IsoDate
   /** Пустая строка — повторять бессрочно. */
   endDate: string
+  executionMode: RecurringExecutionMode
 }
 
 export type RecurringField =
@@ -90,6 +92,7 @@ export function validateRecurringDraft(
     startDate: draft.startDate,
     // Поле необязательное: пустую строку в базу не пишем
     ...(endDate === '' ? {} : { endDate }),
+    executionMode: draft.executionMode,
   }
 
   const failed = (): ValidationResult<RecurringInput, RecurringField> => ({ ok: false, errors })
@@ -118,6 +121,8 @@ export function validateRecurringDraft(
 }
 
 export function draftFromRecurring(recurring: RecurringTransaction): RecurringDraft {
+  // Правила до 0.4 записаны без режима — они срабатывали автоматически
+  const executionMode: RecurringExecutionMode = recurring.executionMode === 'confirm' ? 'confirm' : 'automatic'
   const common = {
     amountText: Money.toInputString(recurring.amount),
     note: recurring.note,
@@ -125,6 +130,7 @@ export function draftFromRecurring(recurring: RecurringTransaction): RecurringDr
     intervalText: String(recurring.interval),
     startDate: recurring.startDate,
     endDate: recurring.endDate ?? '',
+    executionMode,
   }
 
   if (isRecurringTransfer(recurring)) {
@@ -161,5 +167,6 @@ export function emptyRecurringDraft(accountId: Id | null, today: IsoDate): Recur
     intervalText: '1',
     startDate: today,
     endDate: '',
+    executionMode: 'automatic',
   }
 }

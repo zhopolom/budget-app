@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Account, Budget, Category, EntryTransaction } from '../types/entities'
 import { Money } from '../utils/money'
 import { BudgetDatabase, db, DB_NAME, DB_VERSION } from './database'
-import { SCHEMA_V1 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
 
 /**
  * Проверяем реальный путь обновления: база версии 1 с данными пользователя
@@ -99,8 +99,8 @@ describe('миграция v1 → v2', () => {
     await writeV1Database()
     const upgraded = await openUpgraded()
 
-    expect(DB_VERSION).toBe(3)
-    expect(upgraded.verno).toBe(3)
+    expect(DB_VERSION).toBe(4)
+    expect(upgraded.verno).toBe(4)
     upgraded.close()
   })
 
@@ -171,5 +171,72 @@ describe('миграция v1 → v2', () => {
     expect(await fresh.categories.count()).toBeGreaterThan(0)
     expect(await fresh.settings.get('app')).toBeDefined()
     fresh.close()
+  })
+})
+
+/** База v3: правила ещё не знают executionMode, таблицы вхождений нет. */
+async function writeV3Database(rules: object[]): Promise<void> {
+  const legacy = new Dexie(DB_NAME)
+  legacy.version(1).stores(SCHEMA_V1)
+  legacy.version(2).stores(SCHEMA_V2)
+  legacy.version(3).stores(SCHEMA_V3)
+  await legacy.open()
+  await Promise.all([
+    legacy.table('accounts').add(V1_ACCOUNT),
+    legacy.table('categories').add(V1_CATEGORY),
+    legacy.table('transactions').bulkAdd(V1_TRANSACTIONS),
+    legacy.table('recurringTransactions').bulkAdd(rules),
+    legacy.table('settings').add({ id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: V1_ACCOUNT.id }),
+  ])
+  legacy.close()
+}
+
+const V3_RULE = {
+  id: 'rule-v3',
+  type: 'expense',
+  amount: Money.fromMajor(199),
+  categoryId: V1_CATEGORY.id,
+  accountId: V1_ACCOUNT.id,
+  note: 'Spotify',
+  frequency: 'monthly',
+  interval: 1,
+  startDate: '2026-08-14',
+  nextOccurrence: '2026-10-14',
+  isActive: true,
+  createdAt: 1,
+  updatedAt: 1,
+}
+
+describe('миграция v3 → v4', () => {
+  it('размечает старые правила как автоматические и заводит пустую таблицу вхождений', async () => {
+    await writeV3Database([V3_RULE])
+    const upgraded = await openUpgraded()
+
+    expect(upgraded.verno).toBe(4)
+    const rule = await upgraded.recurringTransactions.get(V3_RULE.id)
+    expect(rule).toEqual({ ...V3_RULE, executionMode: 'automatic' })
+    expect(await upgraded.pendingOccurrences.count()).toBe(0)
+    upgraded.close()
+  })
+
+  it('не трогает суммы, операции и уже размеченные правила', async () => {
+    await writeV3Database([V3_RULE, { ...V3_RULE, id: 'rule-confirm', executionMode: 'confirm' }])
+    const upgraded = await openUpgraded()
+
+    expect((await upgraded.transactions.toArray()).sort((a, b) => a.id.localeCompare(b.id))).toEqual(V1_TRANSACTIONS)
+    expect((await upgraded.recurringTransactions.get('rule-confirm'))?.executionMode).toBe('confirm')
+    expect((await upgraded.recurringTransactions.get(V3_RULE.id))?.amount).toBe(V3_RULE.amount)
+    upgraded.close()
+  })
+
+  it('повторное открытие ничего не меняет', async () => {
+    await writeV3Database([V3_RULE])
+    const first = await openUpgraded()
+    const snapshot = await first.recurringTransactions.toArray()
+    first.close()
+
+    const second = await openUpgraded()
+    expect(await second.recurringTransactions.toArray()).toEqual(snapshot)
+    second.close()
   })
 })

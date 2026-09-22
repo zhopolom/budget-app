@@ -50,6 +50,19 @@
   font-weight: 500;
 }
 
+/* Подстрока к расходам: то же, что выше, но ещё не случилось */
+.sub {
+  padding-top: 0;
+  margin-top: -4px;
+}
+
+.sub dt,
+.sub dd {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
 /* Итог отделён линией и крупнее: ради него карточка и существует */
 .row[data-total] {
   margin-top: 4px;

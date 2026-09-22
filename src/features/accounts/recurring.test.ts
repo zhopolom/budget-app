@@ -59,6 +59,7 @@ async function seedTransferRule(fromAccountId: Id, toAccountId: Id, startDate: s
     startDate,
     nextOccurrence: startDate,
     isActive: true,
+    executionMode: 'automatic',
     createdAt: 1,
     updatedAt: 1,
   })

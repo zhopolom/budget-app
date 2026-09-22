@@ -38,6 +38,15 @@ export function ForecastCard({ forecast, monthGenitive, currency }: ForecastCard
             {Money.format(-forecast.expectedExpense, currency, { sign: 'always' })}
           </dd>
         </div>
+        {forecast.pendingCount > 0 && (
+          // Ожидающие подтверждения уже в суммах выше, но это ещё не операции — показываем отдельно
+          <div className={`${styles.row} ${styles.sub}`}>
+            <dt>из них ждут подтверждения</dt>
+            <dd>
+              {Money.format(Money.subtract(forecast.pendingIncome, forecast.pendingExpense), currency, { sign: 'always' })}
+            </dd>
+          </div>
+        )}
         <div className={styles.row} data-total>
           <dt>Прогноз</dt>
           <dd data-negative={forecast.projectedBalance < 0 || undefined}>{Money.format(forecast.projectedBalance, currency)}</dd>

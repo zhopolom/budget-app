@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import type { Account, RecurringTransaction, Transaction } from '../../types/entities'
+import type { Account, PendingOccurrence, RecurringTransaction, Transaction } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { DEFAULT_ACCOUNT_IDS } from '../accounts/defaults'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
@@ -28,11 +28,22 @@ function rule(overrides: Partial<RecurringTransaction> & { type?: 'expense' | 'i
     startDate: '2026-01-23',
     nextOccurrence: '2026-09-23',
     isActive: true,
+    executionMode: 'automatic',
     createdAt: counter,
     updatedAt: counter,
     ...overrides,
   } as RecurringTransaction
 }
+
+const pendingFor = (rule: RecurringTransaction, scheduledDate = '2026-09-21', status: PendingOccurrence['status'] = 'pending') =>
+  ({
+    id: `p-${rule.id}-${scheduledDate}`,
+    recurringId: rule.id,
+    scheduledDate,
+    status,
+    createdAt: 1,
+    updatedAt: 1,
+  }) satisfies PendingOccurrence
 
 function transferRule(overrides: Partial<RecurringTransaction> = {}): RecurringTransaction {
   counter += 1
@@ -48,6 +59,7 @@ function transferRule(overrides: Partial<RecurringTransaction> = {}): RecurringT
     startDate: '2026-01-25',
     nextOccurrence: '2026-09-25',
     isActive: true,
+    executionMode: 'automatic',
     createdAt: counter,
     updatedAt: counter,
     ...overrides,
@@ -170,6 +182,45 @@ describe('calculateForecast', () => {
 
   it('без общего бюджета ориентира нет', () => {
     expect(forecastOf([]).guidance).toBeNull()
+  })
+
+  it('ожидающие подтверждения входят в ожидаемое, но показываются отдельно', () => {
+    const utilities = rule({ note: 'Коммунальные', amount: Money.fromMajor(1_840), executionMode: 'confirm', nextOccurrence: '2026-10-21', startDate: '2026-01-21' })
+    const spotify = rule({ amount: Money.fromMajor(199), nextOccurrence: '2026-09-23' })
+    const forecast = calculateForecast({
+      today: TODAY,
+      accounts: ACCOUNTS,
+      transactions: [],
+      rules: [utilities, spotify],
+      pending: [pendingFor(utilities)],
+      monthlyLimit: null,
+    })
+
+    expect(forecast.expectedExpense).toBe(Money.fromMajor(1_840 + 199))
+    expect(forecast.pendingExpense).toBe(Money.fromMajor(1_840))
+    expect(forecast.pendingCount).toBe(1)
+    expect(forecast.scheduledCount).toBe(2)
+    expect(forecast.projectedBalance).toBe(Money.fromMajor(18_420 - 1_840 - 199))
+  })
+
+  it('подтверждённые и пропущенные вхождения и вхождения без расписания не считаются', () => {
+    const utilities = rule({ executionMode: 'confirm', nextOccurrence: '2026-10-21', startDate: '2026-01-21' })
+    const ghost = rule({ id: 'ghost' })
+    const forecast = calculateForecast({
+      today: TODAY,
+      accounts: ACCOUNTS,
+      transactions: [],
+      rules: [utilities],
+      pending: [
+        pendingFor(utilities, '2026-08-21', 'confirmed'),
+        pendingFor(utilities, '2026-07-21', 'skipped'),
+        pendingFor(ghost),
+      ],
+      monthlyLimit: null,
+    })
+
+    expect(forecast.pendingCount).toBe(0)
+    expect(forecast.expectedExpense).toBe(0)
   })
 
   it('ориентир считается по расходам текущего месяца, корректировки его не трогают', () => {

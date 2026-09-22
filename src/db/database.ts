@@ -5,6 +5,7 @@ import type {
   Budget,
   Category,
   CategoryBudget,
+  PendingOccurrence,
   RecurringTransaction,
   Transaction,
 } from '../types/entities'
@@ -21,6 +22,7 @@ export class BudgetDatabase extends Dexie {
   declare budgets: Table<Budget, string>
   declare categoryBudgets: Table<CategoryBudget, string>
   declare recurringTransactions: Table<RecurringTransaction, string>
+  declare pendingOccurrences: Table<PendingOccurrence, string>
   declare settings: Table<AppSettings, string>
 
   constructor(name: string = DB_NAME) {

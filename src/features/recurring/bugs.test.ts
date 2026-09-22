@@ -39,6 +39,7 @@ async function seedRule(patch: Partial<RecurringEntryInput> & { nextOccurrence?:
     id,
     nextOccurrence: nextOccurrence ?? base.startDate,
     isActive: true,
+    executionMode: 'automatic',
     createdAt: 1,
     updatedAt: 1,
   })
@@ -233,6 +234,7 @@ describe('найдено ревью: перевод внутри одного с
       startDate: '2026-01-05',
       nextOccurrence: '2026-01-05',
       isActive: true,
+      executionMode: 'automatic',
       createdAt: 1,
       updatedAt: 1,
     } satisfies RecurringTransfer)

@@ -5,6 +5,7 @@ import type {
   AppSettings,
   Category,
   Id,
+  PendingOccurrence,
   RecurringTransaction,
   Transaction,
 } from '../types/entities'
@@ -38,6 +39,8 @@ export interface RepairSummary {
   createdRecoveredAccount: boolean
   /** Системные категории, которых не хватало и которые созданы заново. */
   systemCategories: number
+  /** Ожидающие вхождения, чьё расписание удалено: подтверждать их нечем. */
+  orphanOccurrences: number
 }
 
 type Record = Transaction | RecurringTransaction
@@ -101,6 +104,20 @@ async function ensureSystemCategories(tx: DexieTransaction, existing: ReadonlySe
   return missing.length
 }
 
+/**
+ * Вхождения без расписания (0.4). В обычной работе их не бывает: удаление
+ * правила забирает их с собой. Но копия могла быть собрана вручную, и тогда
+ * такие записи не подтвердить и не пропустить — снимаем их. Операций это
+ * не касается: подтверждённые уже лежат в истории и остаются там.
+ */
+async function removeOrphanOccurrences(tx: DexieTransaction, rules: ReadonlySet<Id>): Promise<number> {
+  const table = tx.table('pendingOccurrences')
+  const occurrences = (await table.toArray()) as PendingOccurrence[]
+  const orphans = occurrences.filter((occurrence) => !rules.has(occurrence.recurringId))
+  if (orphans.length > 0) await table.bulkDelete(orphans.map((occurrence) => occurrence.id))
+  return orphans.length
+}
+
 export async function repairDanglingReferences(tx: DexieTransaction): Promise<RepairSummary> {
   const [accounts, categories, transactions, rules] = await Promise.all([
     tx.table('accounts').toArray() as Promise<Account[]>,
@@ -120,6 +137,7 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
     recurringCategories: 0,
     createdRecoveredAccount: false,
     systemCategories: 0,
+    orphanOccurrences: 0,
   }
 
   // Сначала категории: без «Другого» чинить битые категории было бы нечем
@@ -168,6 +186,12 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
 
     if (fixed.accountFixed) summary.recurring += 1
     if (fixed.categoryFixed) summary.recurringCategories += 1
+  }
+
+  // Ремонт запускает и миграция v3, когда таблицы v4 в базе ещё нет: смотрим на
+  // настоящую транзакцию IndexedDB, а не на список таблиц, который знает Dexie
+  if (tx.idbtrans.objectStoreNames.contains('pendingOccurrences')) {
+    summary.orphanOccurrences = await removeOrphanOccurrences(tx, new Set(rules.map((rule) => rule.id)))
   }
 
   return summary

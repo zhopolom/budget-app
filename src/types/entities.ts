@@ -146,6 +146,13 @@ export interface CategoryBudget {
 
 export type RecurrenceFrequency = 'daily' | 'weekly' | 'monthly' | 'yearly'
 
+/**
+ * Как расписание срабатывает в день срока (0.4):
+ * automatic — операция создаётся сама, как было всегда;
+ * confirm — создаётся ожидающее вхождение, а операция — только после подтверждения.
+ */
+export type RecurringExecutionMode = 'automatic' | 'confirm'
+
 interface RecurringBase {
   id: Id
   amount: MinorUnits
@@ -159,6 +166,8 @@ interface RecurringBase {
   /** Включительно. Отсутствует — повторяется бессрочно. */
   endDate?: IsoDate
   isActive: boolean
+  /** Миграция v4 проставляет automatic всем правилам, созданным до 0.4. */
+  executionMode: RecurringExecutionMode
   lastGeneratedAt?: Timestamp
   createdAt: Timestamp
   updatedAt: Timestamp
@@ -186,6 +195,26 @@ export interface RecurringTransfer extends RecurringBase {
  * см. features/recurring/occurrences.ts.
  */
 export type RecurringTransaction = RecurringEntry | RecurringTransfer
+
+export type PendingOccurrenceStatus = 'pending' | 'confirmed' | 'skipped'
+
+/**
+ * Вхождение расписания в режиме confirm (0.4). Не операция и не притворяется ею:
+ * в остаток и историю попадает только после подтверждения.
+ *
+ * Подтверждённые и пропущенные записи остаются: по паре [recurringId+scheduledDate]
+ * генерация узнаёт, что этот день уже разобран, и не создаёт его снова.
+ */
+export interface PendingOccurrence {
+  id: Id
+  recurringId: Id
+  scheduledDate: IsoDate
+  status: PendingOccurrenceStatus
+  /** Операция, созданная подтверждением. Только у confirmed. */
+  transactionId?: Id
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
 
 export type ThemePreference = 'system' | 'light' | 'dark'
 

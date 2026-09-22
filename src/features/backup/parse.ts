@@ -4,6 +4,7 @@ import type {
   Budget,
   Category,
   CategoryBudget,
+  PendingOccurrence,
   RecurringTransaction,
   Transaction,
 } from '../../types/entities'
@@ -60,6 +61,8 @@ const CURRENCIES = new Set(['UAH', 'USD', 'EUR', 'PLN'])
 const ACCOUNT_TYPES = new Set(['card', 'cash', 'savings', 'other'])
 const CATEGORY_TYPES = new Set(['expense', 'income'])
 const FREQUENCIES = new Set(['daily', 'weekly', 'monthly', 'yearly'])
+const EXECUTION_MODES = new Set(['automatic', 'confirm'])
+const OCCURRENCE_STATUSES = new Set(['pending', 'confirmed', 'skipped'])
 const THEMES = new Set(['system', 'light', 'dark'])
 
 function parseAccount(value: unknown): Account | null {
@@ -173,7 +176,7 @@ function parseCategoryBudget(value: unknown): CategoryBudget | null {
 
 function parseRecurring(value: unknown): RecurringTransaction | null {
   if (!isObject(value)) return null
-  const { id, type, amount, note, frequency, interval } = value
+  const { id, type, amount, note, frequency, interval, executionMode } = value
   const { startDate, nextOccurrence, endDate, isActive, lastGeneratedAt, createdAt, updatedAt } = value
 
   if (!isId(id) || !isPositiveMoneyAmount(amount)) return null
@@ -195,6 +198,11 @@ function parseRecurring(value: unknown): RecurringTransaction | null {
     nextOccurrence: nextOccurrence as string,
     ...(isDate(endDate) ? { endDate: endDate as string } : {}),
     isActive: isActive !== false,
+    // Копии до v4 режима не знали: их правила срабатывали автоматически
+    executionMode:
+      typeof executionMode === 'string' && EXECUTION_MODES.has(executionMode)
+        ? (executionMode as RecurringTransaction['executionMode'])
+        : 'automatic',
     ...(isTimestamp(lastGeneratedAt) ? { lastGeneratedAt } : {}),
     createdAt: stamp,
     updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
@@ -217,6 +225,25 @@ function parseRecurring(value: unknown): RecurringTransaction | null {
   }
 
   return null
+}
+
+/** Ожидающие вхождения появились в v4; ссылка на расписание проверяется в validateBackup. */
+function parsePendingOccurrence(value: unknown): PendingOccurrence | null {
+  if (!isObject(value)) return null
+  const { id, recurringId, scheduledDate, status, transactionId, createdAt, updatedAt } = value
+  if (!isId(id) || !isId(recurringId) || !isDate(scheduledDate)) return null
+  if (typeof status !== 'string' || !OCCURRENCE_STATUSES.has(status)) return null
+
+  const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
+  return {
+    id,
+    recurringId,
+    scheduledDate: scheduledDate as string,
+    status: status as PendingOccurrence['status'],
+    ...(isId(transactionId) ? { transactionId } : {}),
+    createdAt: stamp,
+    updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
+  }
 }
 
 function parseSettings(value: unknown): AppSettings {
@@ -335,6 +362,9 @@ export function parseBackup(text: string): ParseBackupResult {
   const recurringTransactions = parseList(source.recurringTransactions, parseRecurring, 'регулярные операции')
   if (typeof recurringTransactions === 'string') return { ok: false, error: recurringTransactions }
 
+  const pendingOccurrences = parseList(source.pendingOccurrences, parsePendingOccurrence, 'ожидающие операции')
+  if (typeof pendingOccurrences === 'string') return { ok: false, error: pendingOccurrences }
+
   // Копия v1 лимитов категорий ещё не знала — достаём их из бюджетов.
   // Дубли не схлопываем: их найдёт validateBackup и откажет от файла целиком
   const legacyLimits = schemaVersion < 2 ? migrateLegacyCategoryLimits(budgetsRaw) : []
@@ -346,6 +376,7 @@ export function parseBackup(text: string): ParseBackupResult {
     budgets,
     categoryBudgets: [...categoryBudgets, ...legacyLimits],
     recurringTransactions,
+    pendingOccurrences,
     settings: parseSettings(source.settings),
   }
 

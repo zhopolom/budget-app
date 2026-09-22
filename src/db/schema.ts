@@ -47,3 +47,15 @@ export const SCHEMA_V2 = {
 export const SCHEMA_V3 = {
   recurringTransactions: 'id, nextOccurrence, createdAt, accountId, fromAccountId, toAccountId, categoryId',
 } as const satisfies Record<string, string>
+
+/**
+ * v4 — режим подтверждения регулярных операций.
+ *
+ * pendingOccurrences:
+ *   &[recurringId+scheduledDate] — одно вхождение на день расписания: та же
+ *   защита от дублей, что и у операций. status индексируем ради списка
+ *   «ожидают подтверждения» на главной, recurringId — ради удаления правила.
+ */
+export const SCHEMA_V4 = {
+  pendingOccurrences: 'id, &[recurringId+scheduledDate], recurringId, status, scheduledDate',
+} as const satisfies Record<string, string>

@@ -307,7 +307,7 @@ describe('регулярные переводы в копии', () => {
     )
 
     const backup = await createBackup(new Date(2026, 8, 21), '0.3.0')
-    expect(backup.schemaVersion).toBe(3)
+    expect(backup.schemaVersion).toBe(BACKUP_SCHEMA_VERSION)
 
     const parsed = parseBackup(serializeBackup(backup))
     expect(parsed.ok).toBe(true)
@@ -478,6 +478,8 @@ describe('импорт копии v0.2', () => {
         isActive: true,
         createdAt: 100,
         updatedAt: 100,
+        // Режим появился в 0.4: старые правила читаются как автоматические
+        executionMode: 'automatic',
       },
     ])
   })

@@ -1,8 +1,8 @@
 import type { Transaction as DexieTransaction } from 'dexie'
 import { categoryBudgetIdFor } from '../features/budgets/ids'
-import type { Budget, CategoryBudget } from '../types/entities'
+import type { Budget, CategoryBudget, RecurringTransaction } from '../types/entities'
 import { repairDanglingReferences } from './repair'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema'
 
 export interface Migration {
   version: number
@@ -54,6 +54,20 @@ async function moveCategoryLimits(tx: DexieTransaction): Promise<void> {
 }
 
 /**
+ * Правила до 0.4 срабатывали только автоматически — так и записываем.
+ * Идемпотентно: уже размеченные правила не трогаются.
+ */
+async function markAutomaticExecution(tx: DexieTransaction): Promise<void> {
+  await tx
+    .table('recurringTransactions')
+    .toCollection()
+    .filter((rule: RecurringTransaction) => rule.executionMode !== 'automatic' && rule.executionMode !== 'confirm')
+    .modify((rule: RecurringTransaction) => {
+      rule.executionMode = 'automatic'
+    })
+}
+
+/**
  * История схемы. Новые версии только добавляются в конец.
  *
  * Пример будущей миграции:
@@ -97,6 +111,16 @@ export const migrations: readonly Migration[] = [
      * миграция чинит битые ссылки — см. db/repair.ts.
      */
     upgrade: repairDanglingReferences,
+  },
+  {
+    version: 4,
+    description: 'Режим подтверждения регулярных операций и таблица ожидающих вхождений',
+    stores: SCHEMA_V4,
+    /**
+     * Данные v3 не переписываются: у правил появляется executionMode: 'automatic',
+     * то есть ровно то поведение, которое у них было. Новая таблица пуста.
+     */
+    upgrade: markAutomaticExecution,
   },
 ]
 

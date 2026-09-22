@@ -9,9 +9,18 @@ import { validateBackup } from './validate'
 export async function createBackup(exportDate: Date, appVersion: string): Promise<BackupFile> {
   const data = await db.transaction(
     'r',
-    [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],
+    [
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.categoryBudgets,
+      db.recurringTransactions,
+      db.pendingOccurrences,
+      db.settings,
+    ],
     async (): Promise<BackupData> => {
-      const [accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, settings] =
+      const [accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, pendingOccurrences, settings] =
         await Promise.all([
           db.accounts.toArray(),
           db.categories.toArray(),
@@ -19,10 +28,20 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
           db.budgets.toArray(),
           db.categoryBudgets.toArray(),
           db.recurringTransactions.toArray(),
+          db.pendingOccurrences.toArray(),
           settingsRepository.get(),
         ])
 
-      return { accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, settings }
+      return {
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        categoryBudgets,
+        recurringTransactions,
+        pendingOccurrences,
+        settings,
+      }
     },
   )
 
@@ -55,7 +74,16 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
 
   return db.transaction(
     'rw',
-    [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],
+    [
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.categoryBudgets,
+      db.recurringTransactions,
+      db.pendingOccurrences,
+      db.settings,
+    ],
     async (transaction) => {
       await Promise.all([
         db.accounts.clear(),
@@ -64,6 +92,7 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.budgets.clear(),
         db.categoryBudgets.clear(),
         db.recurringTransactions.clear(),
+        db.pendingOccurrences.clear(),
       ])
 
       await Promise.all([
@@ -73,6 +102,7 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.budgets.bulkAdd(data.budgets),
         db.categoryBudgets.bulkAdd(data.categoryBudgets),
         db.recurringTransactions.bulkAdd(data.recurringTransactions),
+        db.pendingOccurrences.bulkAdd(data.pendingOccurrences),
         db.settings.put({ ...data.settings, id: SETTINGS_ID }),
       ])
 

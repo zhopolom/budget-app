@@ -43,6 +43,7 @@ async function seedRule(options: SeedOptions = {}): Promise<Id> {
     ...(options.endDate ? { endDate: options.endDate } : {}),
     nextOccurrence: options.nextOccurrence ?? startDate,
     isActive: options.isActive ?? true,
+    executionMode: 'automatic',
     createdAt: 1,
     updatedAt: 1,
   })

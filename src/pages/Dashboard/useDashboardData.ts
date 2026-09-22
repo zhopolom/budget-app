@@ -17,6 +17,7 @@ import {
   type Forecast,
   type UpcomingOccurrence,
 } from '../../features/forecast/service'
+import { pendingOccurrencesRepository, type PendingOccurrenceView } from '../../features/recurring/pending'
 import { recurringRepository } from '../../features/recurring/repository'
 import { settingsRepository } from '../../features/settings/repository'
 import {
@@ -55,6 +56,8 @@ export interface DashboardData {
   forecast: Forecast | null
   /** Ближайшие регулярные операции; пусто для не текущего месяца. */
   upcoming: UpcomingOccurrence[]
+  /** Вхождения, которые ждут подтверждения, — в любом месяце: решение нужно сейчас. */
+  pending: PendingOccurrenceView[]
   accounts: Account[]
   categories: Category[]
 }
@@ -66,9 +69,18 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
   // Одна read-транзакция: все цифры считаются по согласованному снимку базы
   return db.transaction(
     'r',
-    [db.settings, db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions],
+    [
+      db.settings,
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.categoryBudgets,
+      db.recurringTransactions,
+      db.pendingOccurrences,
+    ],
     async () => {
-      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits, rules] =
+      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits, rules, pending] =
         await Promise.all([
           settingsRepository.get(),
           accountsRepository.listAll(),
@@ -81,6 +93,7 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
           budgetsRepository.getForMonth(month),
           categoryBudgetsRepository.listForMonth(month),
           recurringRepository.listAll(),
+          pendingOccurrencesRepository.listPendingViews(),
         ])
 
       const monthTotals = calculateTotals(monthTransactions)
@@ -103,10 +116,12 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
               accounts,
               transactions: allTransactions,
               rules,
+              pending: pending.map((view) => view.occurrence),
               monthlyLimit: budget?.totalLimit ?? null,
             })
           : null,
         upcoming: isCurrentMonth ? listUpcoming(rules, today, addDaysIso(today, UPCOMING_DAYS), UPCOMING_LIMIT) : [],
+        pending,
         accounts,
         categories,
       }
