@@ -18,7 +18,13 @@ import { budgetsRepository, categoryBudgetsRepository } from '../../features/bud
 import { templatesRepository } from '../../features/budgets/templatesRepository'
 import { useToday } from '../../hooks/useToday'
 import type { BudgetTemplate, Id, MinorUnits } from '../../types/entities'
-import { formatMonthGenitive, previousMonth } from '../../utils/dates'
+import {
+  formatMonthAccusative,
+  formatMonthDative,
+  formatMonthGenitive,
+  formatMonthPrepositional,
+  previousMonth,
+} from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
 import { AmountSheet } from './AmountSheet'
@@ -145,7 +151,7 @@ export function BudgetsPage() {
 
             {data.previous && (
               <Button variant="secondary" block onClick={() => startApply({ kind: 'previous' })}>
-                Скопировать бюджет за {formatMonthGenitive(previousMonth(month))}
+                Скопировать бюджет за {formatMonthAccusative(previousMonth(month))}
               </Button>
             )}
 
@@ -202,7 +208,7 @@ export function BudgetsPage() {
             template={openTemplate}
             categories={data.categories}
             currency={data.currency}
-            monthGenitive={formatMonthGenitive(month)}
+            monthDative={formatMonthDative(month)}
             onApply={(template) => startApply({ kind: 'template', template })}
             onRemove={(template) => void removeTemplate(template)}
             onClose={() => setOpenTemplate(null)}
@@ -213,12 +219,12 @@ export function BudgetsPage() {
           <Sheet
             open={applying !== null}
             onClose={() => setApplying(null)}
-            title={`Применить к ${formatMonthGenitive(month)}`}
+            title={`Применить к ${formatMonthDative(month)}`}
           >
             {applying && mergePlan && replacePlan && (
               <div className={styles.preview}>
                 <p className={styles.previewText}>
-                  В {formatMonthGenitive(month)} бюджет уже задан: {describeSnapshot(data.current, data.currency)}.{' '}
+                  В {formatMonthPrepositional(month)} бюджет уже задан: {describeSnapshot(data.current, data.currency)}.{' '}
                   {sourceTitle(applying, formatMonthGenitive(previousMonth(month)))} можно добавить к нему или поставить вместо него.
                 </p>
                 <div className={styles.previewActions}>
@@ -253,7 +259,7 @@ export function BudgetsPage() {
           <AmountSheet
             open={editingRow !== undefined}
             title={editingRow ? `${editingRow.category.icon} ${editingRow.category.name}` : ''}
-            label={`Лимит на ${formatMonthGenitive(month)}`}
+            label={`Лимит на ${formatMonthAccusative(month)}`}
             hint={
               editingRow && editingRow.spent > 0
                 ? `Уже потрачено ${Money.format(editingRow.spent, data.currency)}. Пустое поле убирает лимит.`

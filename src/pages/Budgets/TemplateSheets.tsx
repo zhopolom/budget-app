@@ -15,14 +15,14 @@ interface TemplateSheetProps {
   categories: readonly Category[]
   currency: CurrencyCode
   /** «сентябрю» — куда применяем. */
-  monthGenitive: string
+  monthDative: string
   onApply: (template: BudgetTemplate) => void
   onRemove: (template: BudgetTemplate) => void
   onClose: () => void
 }
 
 /** Содержимое шаблона и два действия: применить к выбранному месяцу или удалить. */
-export function TemplateSheet({ template, categories, currency, monthGenitive, onApply, onRemove, onClose }: TemplateSheetProps) {
+export function TemplateSheet({ template, categories, currency, monthDative, onApply, onRemove, onClose }: TemplateSheetProps) {
   return (
     <Sheet open={template !== null} onClose={onClose} title={template?.name ?? 'Шаблон'}>
       {template && (
@@ -49,7 +49,7 @@ export function TemplateSheet({ template, categories, currency, monthGenitive, o
 
           <div className={styles.actions}>
             <Button block onClick={() => onApply(template)}>
-              Применить к {monthGenitive}
+              Применить к {monthDative}
             </Button>
             <Button variant="danger" block onClick={() => onRemove(template)}>
               Удалить шаблон

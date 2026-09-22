@@ -16,6 +16,10 @@ import {
   shiftMonth,
   toIsoDate,
   yearMonthOf,
+  formatMonthAccusative,
+  formatMonthDative,
+  formatMonthGenitive,
+  formatMonthPrepositional,
 } from './dates'
 
 describe('месяцы', () => {
@@ -99,5 +103,23 @@ describe('календарь', () => {
     expect(formatFutureDay('2026-10-14', '2026-09-21')).toBe('14 октября')
     expect(formatFutureDay('2027-01-05', '2026-09-21')).toBe('5 января 2027')
     expect(formatFutureDay('2026-09-20', '2026-09-21')).toBe('Вчера')
+  })
+})
+
+describe('падежи названий месяцев', () => {
+  const september = { year: 2026, month: 9 }
+  const may = { year: 2026, month: 5 }
+
+  it('«бюджет сентября», «за сентябрь», «к сентябрю», «в сентябре»', () => {
+    expect(formatMonthGenitive(september)).toBe('сентября')
+    expect(formatMonthAccusative(september)).toBe('сентябрь')
+    expect(formatMonthDative(september)).toBe('сентябрю')
+    expect(formatMonthPrepositional(september)).toBe('сентябре')
+  })
+
+  it('май склоняется как май', () => {
+    expect(formatMonthAccusative(may)).toBe('май')
+    expect(formatMonthDative(may)).toBe('маю')
+    expect(formatMonthPrepositional(may)).toBe('мае')
   })
 })

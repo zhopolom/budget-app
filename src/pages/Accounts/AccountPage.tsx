@@ -13,7 +13,7 @@ import { useAccountsOverview } from '../../features/accounts/useAccountsOverview
 import { groupByDay } from '../../features/transactions/grouping'
 import { useToday } from '../../hooks/useToday'
 import type { MinorUnits } from '../../types/entities'
-import { formatDayLabel, formatMonthGenitive } from '../../utils/dates'
+import { formatDayLabel, formatMonthAccusative } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
 import { AccountForm } from './AccountForm'
@@ -83,7 +83,7 @@ export function AccountPage() {
 
           <MonthSelector selection={selection} />
 
-          <section className={styles.tiles} aria-label={`Обороты за ${formatMonthGenitive(selection.month)}`}>
+          <section className={styles.tiles} aria-label={`Обороты за ${formatMonthAccusative(selection.month)}`}>
             <Tile label="Доходы" value={data.activity.income} currency={data.currency} tone="positive" />
             <Tile label="Расходы" value={data.activity.expense} currency={data.currency} />
             <Tile label="Пришло переводом" value={data.activity.transferIn} currency={data.currency} />
