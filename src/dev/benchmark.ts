@@ -4,6 +4,7 @@ import { buildMonthAnalytics } from '../features/analytics/service'
 import { createBackup, serializeBackup } from '../features/backup/repository'
 import { toCsv } from '../features/backup/csv'
 import { SYSTEM_CATEGORY_IDS as C } from '../features/categories/defaults'
+import { calculateForecast, listUpcoming, UPCOMING_DAYS } from '../features/forecast/service'
 import {
   calculateAccountActivity,
   calculateAccountBalances,
@@ -14,8 +15,8 @@ import {
 import { applyFilters, EMPTY_FILTERS } from '../features/transactions/filters'
 import { accountIdsOf } from '../features/transactions/model'
 import { toTransactionViews } from '../features/transactions/views'
-import type { Transaction } from '../types/entities'
-import { monthDateRange, toIsoDate, toYearMonth } from '../utils/dates'
+import type { RecurringTransaction, Transaction } from '../types/entities'
+import { addDaysIso, monthDateRange, toIsoDate, toYearMonth } from '../utils/dates'
 import { Money } from '../utils/money'
 
 /**
@@ -98,6 +99,27 @@ export function generateTransactions(count: number, today = new Date(2026, 8, 22
   return rows
 }
 
+/** Расписания для прогноза: ежедневное, еженедельное, три ежемесячных — обычный набор. */
+function generateRules(today: string): RecurringTransaction[] {
+  const base = {
+    accountId: DEFAULT_ACCOUNT_IDS.card,
+    interval: 1,
+    startDate: '2026-01-01',
+    nextOccurrence: today,
+    isActive: true,
+    executionMode: 'automatic' as const,
+    createdAt: 1,
+    updatedAt: 1,
+  }
+  return [
+    { ...base, id: 'bench-rule-daily', type: 'expense', amount: Money.fromMajor(100), categoryId: C.transport, note: 'Проездной', frequency: 'daily' },
+    { ...base, id: 'bench-rule-weekly', type: 'expense', amount: Money.fromMajor(800), categoryId: C.groceries, note: '', frequency: 'weekly' },
+    { ...base, id: 'bench-rule-rent', type: 'expense', amount: Money.fromMajor(12_000), categoryId: C.home, note: 'Аренда', frequency: 'monthly' },
+    { ...base, id: 'bench-rule-spotify', type: 'expense', amount: Money.fromMajor(199), categoryId: C.subscriptions, note: 'Spotify', frequency: 'monthly' },
+    { ...base, id: 'bench-rule-salary', type: 'income', amount: Money.fromMajor(32_000), categoryId: C.salary, note: '', frequency: 'monthly' },
+  ]
+}
+
 async function median(run: () => Promise<unknown> | unknown, runs = 3): Promise<number> {
   const samples: number[] = []
   for (let index = 0; index < runs; index += 1) {
@@ -170,6 +192,14 @@ export async function runBenchmark(count: number, today = new Date(2026, 8, 22))
   )
 
   timings['CSV'] = await median(() => toCsv(allViews, 'UAH'))
+
+  // Прогноз и ближайшие операции: баланс по всей истории + вхождения расписаний до конца месяца
+  const rules = generateRules(todayIso)
+  timings['прогноз'] = await median(async () => {
+    const all = await db.transactions.toArray()
+    calculateForecast({ today: todayIso, accounts, transactions: all, rules, monthlyLimit: Money.fromMajor(30_000) })
+    listUpcoming(rules, todayIso, addDaysIso(todayIso, UPCOMING_DAYS), 5)
+  })
 
   timings['резервная копия'] = await median(async () => serializeBackup(await createBackup(today, 'bench')))
 
