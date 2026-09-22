@@ -6,6 +6,8 @@ import type {
   BudgetTemplate,
   Category,
   CategoryBudget,
+  CategoryRule,
+  ImportHistory,
   PendingOccurrence,
   RecurringTransaction,
   SavingsGoal,
@@ -27,6 +29,8 @@ export class BudgetDatabase extends Dexie {
   declare pendingOccurrences: Table<PendingOccurrence, string>
   declare savingsGoals: Table<SavingsGoal, string>
   declare budgetTemplates: Table<BudgetTemplate, string>
+  declare importHistory: Table<ImportHistory, string>
+  declare categoryRules: Table<CategoryRule, string>
   declare settings: Table<AppSettings, string>
 
   constructor(name: string = DB_NAME) {

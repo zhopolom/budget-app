@@ -34,6 +34,9 @@ export interface Account {
  */
 export type TransactionType = 'expense' | 'income' | 'transfer' | 'adjustment'
 
+/** Как операция появилась: вручную, по расписанию, из CSV или сверкой остатка. */
+export type TransactionSource = 'manual' | 'recurring' | 'csv' | 'adjustment'
+
 /** То, что вводят руками в форме: корректировку создаёт только сверка остатка. */
 export type ManualTransactionType = 'expense' | 'income' | 'transfer'
 
@@ -68,6 +71,15 @@ interface TransactionBase {
   recurringId?: Id
   /** Плановая дата вхождения регулярной операции (не обязательно равна date). */
   occurrenceDate?: IsoDate
+  /**
+   * Откуда операция (0.6). У записей до 0.6 поля нет — источник выводится
+   * из recurringId и типа, см. transactionSourceOf.
+   */
+  source?: TransactionSource
+  /** Партия импорта CSV — по ней импорт откатывается целиком. */
+  importBatchId?: Id
+  /** Отпечаток строки CSV — по нему следующие импорты находят дубли. */
+  sourceFingerprint?: string
   createdAt: Timestamp
   updatedAt: Timestamp
 }
@@ -182,6 +194,46 @@ export interface BudgetTemplate {
   /** 0 — общий лимит шаблон не задаёт. */
   totalLimit: MinorUnits
   categoryLimits: BudgetTemplateLimit[]
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+/** Запись об одном импорте CSV (0.6). Сам файл не хранится. */
+export interface ImportHistory {
+  id: Id
+  fileName: string
+  /** Счёт назначения. */
+  accountId: Id
+  importedAt: Timestamp
+  /** Сколько операций записано. */
+  count: number
+  /** Пропущено пользователем (дубли и строки без категории). */
+  skippedCount: number
+  /** Сколько строк было помечено возможными дублями. */
+  duplicateCount: number
+  /** Строк с ошибками разбора. */
+  errorCount: number
+  /** Когда импорт отменён; отсутствует — записи на месте. */
+  rolledBackAt?: Timestamp
+}
+
+export type RuleMatchType = 'contains' | 'startsWith' | 'exact'
+
+/**
+ * Локальное правило категории (0.6): описание, подходящее под шаблон,
+ * получает категорию. Сопоставление регистронезависимое по нормализованному
+ * описанию; при нескольких подходящих правилах побеждает большее priority.
+ */
+export interface CategoryRule {
+  id: Id
+  name: string
+  enabled: boolean
+  matchType: RuleMatchType
+  pattern: string
+  categoryId: Id
+  /** Ограничить правило одним счётом. */
+  accountId?: Id
+  priority: number
   createdAt: Timestamp
   updatedAt: Timestamp
 }

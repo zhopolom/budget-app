@@ -2,7 +2,7 @@ import type { Transaction as DexieTransaction } from 'dexie'
 import { categoryBudgetIdFor } from '../features/budgets/ids'
 import type { Budget, CategoryBudget, RecurringTransaction } from '../types/entities'
 import { repairDanglingReferences } from './repair'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5, SCHEMA_V6 } from './schema'
 
 export interface Migration {
   version: number
@@ -128,6 +128,17 @@ export const migrations: readonly Migration[] = [
     stores: SCHEMA_V5,
     // Только новые таблицы: у существующих записей ничего не меняется.
     // Флаг rollover у лимитов категорий — необязательное поле без индекса
+  },
+  {
+    version: 6,
+    description: 'Импорт CSV: метаданные источника, история импорта, правила категорий',
+    stores: SCHEMA_V6,
+    /**
+     * Данные не переписываются: источник старых операций выводится из типа и
+     * recurringId на чтении (transactionSourceOf), а не проставляется всем
+     * записям — на большой истории это была бы долгая миграция ради поля,
+     * которое и так известно.
+     */
   },
 ]
 

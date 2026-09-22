@@ -4,6 +4,7 @@ import type {
   Id,
   MinorUnits,
   Transaction,
+  TransactionSource,
   TransferTransaction,
 } from '../../types/entities'
 
@@ -62,6 +63,13 @@ export function balanceDelta(transaction: Transaction, accountId: Id): MinorUnit
   if (transaction.accountId !== accountId) return 0
   if (isAdjustment(transaction)) return adjustmentDelta(transaction)
   return transaction.type === 'expense' ? -transaction.amount : transaction.amount
+}
+
+/** Источник операции: у записей до 0.6 поля нет, но ответ известен по типу и связи с расписанием. */
+export function transactionSourceOf(transaction: Transaction): TransactionSource {
+  if (transaction.source) return transaction.source
+  if (transaction.type === 'adjustment') return 'adjustment'
+  return transaction.recurringId ? 'recurring' : 'manual'
 }
 
 /** Убирает служебные поля: то, что создаёт или меняет пользователь. */

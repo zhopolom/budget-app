@@ -71,3 +71,19 @@ export const SCHEMA_V5 = {
   savingsGoals: 'id, linkedAccountId, createdAt',
   budgetTemplates: 'id, createdAt',
 } as const satisfies Record<string, string>
+
+/**
+ * v6 — импорт CSV и правила категорий.
+ *
+ * transactions: индекс importBatchId — откат импорта находит свою партию
+ * запросом, а не перебором истории. Остальные индексы повторяются: Dexie
+ * задаёт таблице полный список, а не разницу.
+ * categoryRules: priority — для порядка применения, categoryId и accountId —
+ * для удаления категории и счёта.
+ */
+export const SCHEMA_V6 = {
+  transactions:
+    'id, date, [date+createdAt], type, categoryId, accountId, fromAccountId, toAccountId, &[recurringId+occurrenceDate], importBatchId',
+  importHistory: 'id, importedAt',
+  categoryRules: 'id, priority, categoryId, accountId, createdAt',
+} as const satisfies Record<string, string>

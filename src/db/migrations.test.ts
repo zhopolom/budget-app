@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Account, Budget, Category, EntryTransaction } from '../types/entities'
 import { Money } from '../utils/money'
 import { BudgetDatabase, db, DB_NAME, DB_VERSION } from './database'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema'
 
 /**
  * Проверяем реальный путь обновления: база версии 1 с данными пользователя
@@ -99,8 +99,8 @@ describe('миграция v1 → v2', () => {
     await writeV1Database()
     const upgraded = await openUpgraded()
 
-    expect(DB_VERSION).toBe(5)
-    expect(upgraded.verno).toBe(5)
+    expect(DB_VERSION).toBe(6)
+    expect(upgraded.verno).toBe(6)
     upgraded.close()
   })
 
@@ -281,7 +281,7 @@ describe('миграция v4 → v5', () => {
     await writeV4Database()
     const upgraded = await openUpgraded()
 
-    expect(upgraded.verno).toBe(5)
+    expect(upgraded.verno).toBe(DB_VERSION)
     expect(await upgraded.savingsGoals.count()).toBe(0)
     expect(await upgraded.budgetTemplates.count()).toBe(0)
     expect((await upgraded.transactions.toArray()).sort((a, b) => a.id.localeCompare(b.id))).toEqual(V1_TRANSACTIONS)
@@ -289,6 +289,51 @@ describe('миграция v4 → v5', () => {
     expect((await upgraded.pendingOccurrences.get('p-1'))?.status).toBe('pending')
     // Лимит без флага rollover читается как лимит без переноса
     expect((await upgraded.categoryBudgets.get('2026-08:cat-exp-groceries'))?.rollover).toBeUndefined()
+    upgraded.close()
+  })
+})
+
+/** База v5: цели и шаблоны есть, истории импорта и правил ещё нет. */
+async function writeV5Database(): Promise<void> {
+  const legacy = new Dexie(DB_NAME)
+  legacy.version(1).stores(SCHEMA_V1)
+  legacy.version(2).stores(SCHEMA_V2)
+  legacy.version(3).stores(SCHEMA_V3)
+  legacy.version(4).stores(SCHEMA_V4)
+  legacy.version(5).stores(SCHEMA_V5)
+  await legacy.open()
+  await Promise.all([
+    legacy.table('accounts').add(V1_ACCOUNT),
+    legacy.table('categories').add(V1_CATEGORY),
+    legacy.table('transactions').bulkAdd(V1_TRANSACTIONS),
+    legacy.table('recurringTransactions').add({ ...V3_RULE, executionMode: 'automatic' }),
+    legacy.table('savingsGoals').add({
+      id: 'goal-1',
+      name: 'MacBook',
+      icon: '💻',
+      targetAmount: Money.fromMajor(80_000),
+      currentAmount: Money.fromMajor(1_000),
+      isArchived: false,
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+    legacy.table('settings').add({ id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: V1_ACCOUNT.id }),
+  ])
+  legacy.close()
+}
+
+describe('миграция v5 → v6', () => {
+  it('добавляет индекс партии импорта и пустые таблицы истории и правил, не трогая записи', async () => {
+    await writeV5Database()
+    const upgraded = await openUpgraded()
+
+    expect(upgraded.verno).toBe(6)
+    expect(await upgraded.importHistory.count()).toBe(0)
+    expect(await upgraded.categoryRules.count()).toBe(0)
+    expect((await upgraded.transactions.toArray()).sort((a, b) => a.id.localeCompare(b.id))).toEqual(V1_TRANSACTIONS)
+    expect((await upgraded.savingsGoals.get('goal-1'))?.currentAmount).toBe(Money.fromMajor(1_000))
+    // Новый индекс работает: по партии импорта ничего нет
+    expect(await upgraded.transactions.where('importBatchId').equals('none').count()).toBe(0)
     upgraded.close()
   })
 })
