@@ -79,6 +79,21 @@ describe('buildCategoryBudgetProgress', () => {
     expect(first.isOver).toBe(false)
   })
 
+  it('перенос из прошлого месяца добавляется к лимиту, но виден отдельно', () => {
+    const [row] = buildCategoryBudgetProgress(
+      [limit('groceries', 6_000)],
+      new Map([['groceries', Money.fromMajor(6_500)]]),
+      CATEGORIES,
+      new Map([['groceries', Money.fromMajor(800)]]),
+    )
+
+    expect(row.baseLimit).toBe(Money.fromMajor(6_000))
+    expect(row.carry).toBe(Money.fromMajor(800))
+    expect(row.limit).toBe(Money.fromMajor(6_800))
+    expect(row.remaining).toBe(Money.fromMajor(300))
+    expect(row.isOver).toBe(false)
+  })
+
   it('показывает превышение отрицательным остатком', () => {
     const [over] = buildCategoryBudgetProgress([limit('fun', 5_000)], spent, CATEGORIES)
 

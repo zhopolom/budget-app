@@ -2,6 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/database'
 import type { BudgetSnapshot } from '../../features/budgets/apply'
 import { budgetsRepository, categoryBudgetsRepository } from '../../features/budgets/repository'
+import { loadEffectiveLimits } from '../../features/budgets/rolloverData'
 import { snapshotOfMonth, templatesRepository } from '../../features/budgets/templatesRepository'
 import { categoriesRepository } from '../../features/categories/repository'
 import { settingsRepository } from '../../features/settings/repository'
@@ -13,8 +14,12 @@ import { monthDateRange, monthKey, previousMonth, type YearMonth } from '../../u
 
 export interface CategoryLimitRow {
   category: Category
-  /** 0 — лимит не задан. */
+  /** Заданный лимит; 0 — не задан. */
   limit: MinorUnits
+  /** Перенос из прошлого месяца; лимит, с которым сравниваются траты, — limit + carry. */
+  carry: MinorUnits
+  /** Переносить остаток на следующий месяц. */
+  rollover: boolean
   spent: MinorUnits
 }
 
@@ -41,7 +46,7 @@ async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
     'r',
     [db.settings, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.budgetTemplates],
     async () => {
-      const [settings, categories, monthTransactions, budget, limits, current, previous, templates] = await Promise.all([
+      const [settings, categories, monthTransactions, budget, limits, current, previous, templates, effective] = await Promise.all([
         settingsRepository.get(),
         categoriesRepository.listAll(),
         transactionsRepository.listByDateRange(start, end),
@@ -50,10 +55,12 @@ async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
         snapshotOfMonth(month),
         snapshotOfMonth(previousMonth(month)),
         templatesRepository.listAll(),
+        loadEffectiveLimits(month),
       ])
 
       const spent = calculateCategoryTotals(monthTransactions)
       const limitByCategory = new Map<Id, MinorUnits>(limits.map((item) => [item.categoryId, item.limitAmount]))
+      const rolloverByCategory = new Map<Id, boolean>(limits.map((item) => [item.categoryId, item.rollover === true]))
 
       // Лимиты только у расходов: ограничивать доход нечем
       const rows = categories
@@ -61,6 +68,8 @@ async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
         .map((category) => ({
           category,
           limit: limitByCategory.get(category.id) ?? 0,
+          carry: effective.get(category.id)?.carry ?? 0,
+          rollover: rolloverByCategory.get(category.id) ?? false,
           spent: spent.get(category.id) ?? 0,
         }))
 

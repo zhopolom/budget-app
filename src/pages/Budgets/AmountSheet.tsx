@@ -16,7 +16,10 @@ interface AmountSheetProps {
   currency: CurrencyCode
   /** Подпись кнопки удаления, если значение уже задано. */
   clearLabel?: string
-  onSave: (value: MinorUnits) => Promise<void> | void
+  /** Флажок под полем — например, переносить ли остаток лимита. */
+  option?: { label: string; hint?: string; checked: boolean }
+  /** Второй аргумент — состояние флажка (false, если флажка нет). */
+  onSave: (value: MinorUnits, option: boolean) => Promise<void> | void
   onClose: () => void
 }
 
@@ -32,6 +35,7 @@ export function AmountSheet({
   value,
   currency,
   clearLabel = 'Убрать',
+  option,
   onSave,
   onClose,
 }: AmountSheetProps) {
@@ -39,12 +43,13 @@ export function AmountSheet({
     <Sheet open={open} onClose={onClose} title={title}>
       {/* key: при смене категории поле стартует с её собственной суммы */}
       <AmountForm
-        key={`${title}:${value}`}
+        key={`${title}:${value}:${option?.checked ?? ''}`}
         label={label}
         hint={hint}
         value={value}
         currency={currency}
         clearLabel={clearLabel}
+        option={option}
         onSave={onSave}
         onClose={onClose}
       />
@@ -54,15 +59,16 @@ export function AmountSheet({
 
 type AmountFormProps = Omit<AmountSheetProps, 'open' | 'title'>
 
-function AmountForm({ label, hint, value, currency, clearLabel, onSave, onClose }: AmountFormProps) {
+function AmountForm({ label, hint, value, currency, clearLabel, option, onSave, onClose }: AmountFormProps) {
   const [text, setText] = useState(() => (value > 0 ? Money.toInputString(value) : ''))
+  const [checked, setChecked] = useState(option?.checked ?? false)
   const [error, setError] = useState<string | undefined>(undefined)
   const [busy, setBusy] = useState(false)
 
   const submit = async (amount: MinorUnits) => {
     setBusy(true)
     try {
-      await onSave(amount)
+      await onSave(amount, checked)
       onClose()
     } catch (saveError) {
       setBusy(false)
@@ -108,6 +114,21 @@ function AmountForm({ label, hint, value, currency, clearLabel, onSave, onClose 
       />
 
       {hint && <p className={styles.hint}>{hint}</p>}
+
+      {option && (
+        <label className={styles.option}>
+          <input
+            type="checkbox"
+            className={styles.checkbox}
+            checked={checked}
+            onChange={(event) => setChecked(event.target.checked)}
+          />
+          <span className={styles.optionText}>
+            <span className={styles.optionTitle}>{option.label}</span>
+            {option.hint && <span className={styles.optionHint}>{option.hint}</span>}
+          </span>
+        </label>
+      )}
 
       <div className={styles.actions}>
         <Button type="submit" block disabled={busy}>

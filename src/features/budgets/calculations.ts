@@ -50,7 +50,12 @@ export function calculateBudgetProgress(
 
 export interface CategoryBudgetProgress {
   category: Category
+  /** Лимит, с которым сравниваются траты: заданный плюс перенос. */
   limit: MinorUnits
+  /** Лимит, заданный на месяц. */
+  baseLimit: MinorUnits
+  /** Перенос неизрасходованного остатка из прошлого месяца (0.5). */
+  carry: MinorUnits
   spent: MinorUnits
   /** Отрицательное — лимит превышен на эту сумму. */
   remaining: MinorUnits
@@ -74,6 +79,8 @@ export function buildCategoryBudgetProgress(
   limits: readonly CategoryBudget[],
   spentByCategory: ReadonlyMap<Id, MinorUnits>,
   categories: readonly Category[],
+  /** Перенос по категориям (rolloverData.ts); без него лимит равен заданному. */
+  carries: ReadonlyMap<Id, MinorUnits> = new Map(),
 ): CategoryBudgetProgress[] {
   const categoryById = new Map(categories.map((category) => [category.id, category]))
   const order = new Map(categories.map((category, index) => [category.id, index]))
@@ -84,7 +91,8 @@ export function buildCategoryBudgetProgress(
       if (!category) return []
 
       const spent = spentByCategory.get(budget.categoryId) ?? 0
-      const limit = budget.limitAmount
+      const carry = carries.get(budget.categoryId) ?? 0
+      const limit = Money.add(budget.limitAmount, carry)
       const ratio = limit > 0 ? spent / limit : 0
       const isOver = spent > limit
 
@@ -92,6 +100,8 @@ export function buildCategoryBudgetProgress(
         {
           category,
           limit,
+          baseLimit: budget.limitAmount,
+          carry,
           spent,
           remaining: Money.subtract(limit, spent),
           ratio,

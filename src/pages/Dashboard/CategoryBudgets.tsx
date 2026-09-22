@@ -60,6 +60,11 @@ export function CategoryBudgets({ items, currency }: CategoryBudgetsProps) {
               </div>
 
               <p className={styles.amounts}>{amountsText(item, currency)}</p>
+              {item.carry > 0 && (
+                <p className={styles.carry}>
+                  {Money.format(item.baseLimit, currency)} + {Money.format(item.carry, currency)} перенос с прошлого месяца
+                </p>
+              )}
 
               <ProgressBar
                 value={item.ratio}

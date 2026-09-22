@@ -60,8 +60,8 @@ export function BudgetsPage() {
     toast.show(value > 0 ? 'Бюджет сохранён' : 'Бюджет убран')
   }
 
-  const saveCategory = async (categoryId: Id, value: MinorUnits) => {
-    await categoryBudgetsRepository.set(month, categoryId, value)
+  const saveCategory = async (categoryId: Id, value: MinorUnits, rollover: boolean) => {
+    await categoryBudgetsRepository.set(month, categoryId, value, { rollover })
     toast.show(value > 0 ? 'Лимит сохранён' : 'Лимит убран')
   }
 
@@ -156,7 +156,7 @@ export function BudgetsPage() {
                     icon={row.category.icon}
                     title={row.category.name}
                     subtitle={subtitleFor(row, data.currency)}
-                    value={row.limit > 0 ? Money.format(row.limit, data.currency) : '—'}
+                    value={row.limit > 0 ? Money.format(Money.add(row.limit, row.carry), data.currency) : '—'}
                     onClick={() => setEditing({ kind: 'category', categoryId: row.category.id })}
                   />
                 </ListItem>
@@ -262,7 +262,12 @@ export function BudgetsPage() {
             value={editingRow?.limit ?? 0}
             currency={data.currency}
             clearLabel="Убрать лимит"
-            onSave={(value) => (editingRow ? saveCategory(editingRow.category.id, value) : undefined)}
+            option={{
+              label: 'Переносить остаток на следующий месяц',
+              hint: 'Неизрасходованная часть лимита добавится к лимиту следующего месяца. Перерасход не переносится.',
+              checked: editingRow?.rollover ?? false,
+            }}
+            onSave={(value, rollover) => (editingRow ? saveCategory(editingRow.category.id, value, rollover) : undefined)}
             onClose={() => setEditing(null)}
           />
         </>
@@ -291,8 +296,13 @@ function describeSnapshot(snapshot: BudgetSnapshot, currency: Parameters<typeof 
 
 function subtitleFor(row: CategoryLimitRow, currency: Parameters<typeof Money.format>[1]): string | undefined {
   if (row.limit === 0) return row.spent > 0 ? `Потрачено ${Money.format(row.spent, currency)}` : undefined
-  const remaining = Money.subtract(row.limit, row.spent)
-  return remaining < 0
-    ? `+${Money.format(-remaining, currency)} сверх лимита`
-    : `Потрачено ${Money.format(row.spent, currency)}`
+  const effective = Money.add(row.limit, row.carry)
+  const remaining = Money.subtract(effective, row.spent)
+  const parts = [
+    remaining < 0 ? `+${Money.format(-remaining, currency)} сверх лимита` : `Потрачено ${Money.format(row.spent, currency)}`,
+  ]
+  // Перенос виден отдельно: «6 000 + 800» честнее, чем молчаливые 6 800
+  if (row.carry > 0) parts.push(`${Money.format(row.limit, currency)} + ${Money.format(row.carry, currency)} перенос`)
+  else if (row.rollover) parts.push('с переносом остатка')
+  return parts.join(' · ')
 }

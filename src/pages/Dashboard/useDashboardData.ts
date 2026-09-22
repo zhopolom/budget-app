@@ -9,6 +9,7 @@ import {
   type CategoryBudgetProgress,
 } from '../../features/budgets/calculations'
 import { budgetsRepository, categoryBudgetsRepository } from '../../features/budgets/repository'
+import { loadEffectiveLimits } from '../../features/budgets/rolloverData'
 import { categoriesRepository } from '../../features/categories/repository'
 import {
   calculateForecast,
@@ -80,7 +81,7 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
       db.pendingOccurrences,
     ],
     async () => {
-      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits, rules, pending] =
+      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits, rules, pending, effective] =
         await Promise.all([
           settingsRepository.get(),
           accountsRepository.listAll(),
@@ -94,7 +95,9 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
           categoryBudgetsRepository.listForMonth(month),
           recurringRepository.listAll(),
           pendingOccurrencesRepository.listPendingViews(),
+          loadEffectiveLimits(month),
         ])
+      const carries = new Map([...effective].map(([categoryId, limit]) => [categoryId, limit.carry]))
 
       const monthTotals = calculateTotals(monthTransactions)
       const spentByCategory = calculateCategoryTotals(monthTransactions)
@@ -107,7 +110,7 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
         totalBalance: calculateTotalBalance(accounts, allTransactions),
         monthTotals,
         budget: budget ? calculateBudgetProgress(budget.totalLimit, monthTotals.expense, month, todayDate) : null,
-        categoryBudgets: buildCategoryBudgetProgress(limits, spentByCategory, categories),
+        categoryBudgets: buildCategoryBudgetProgress(limits, spentByCategory, categories, carries),
         categoryLimitsTotal: totalCategoryLimits(limits),
         recent: toTransactionViews(recent, categories, accounts),
         forecast: isCurrentMonth
