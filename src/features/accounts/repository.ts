@@ -1,7 +1,7 @@
 import { db } from '../../db/database'
 import type { Account, CurrencyCode, Id, RecurringTransaction, Timestamp } from '../../types/entities'
 import { createId } from '../../utils/id'
-import { Money } from '../../utils/money'
+import { isNonNegativeMoneyAmount, Money } from '../../utils/money'
 import { isSelfTransferRule } from '../recurring/model'
 import { SETTINGS_ID } from '../settings/defaults'
 import type { AccountInput } from './validation'
@@ -15,6 +15,11 @@ export interface TransferAndRemoveResult {
    * счёту. Такие выключаются: создавать переводы «внутри счёта» нельзя.
    */
   stoppedRecurring: RecurringTransaction[]
+}
+
+/** Последняя проверка перед записью: форма уже отсеяла мусор, но репозиторий вызывают не только формы. */
+function assertInitialBalance(value: unknown): void {
+  if (!isNonNegativeMoneyAmount(value)) throw new RangeError('Начальный остаток должен быть от 0 до допустимого максимума')
 }
 
 /**
@@ -33,6 +38,7 @@ export const accountsRepository = {
   },
 
   async create(input: AccountInput, currency: CurrencyCode): Promise<Account> {
+    assertInitialBalance(input.initialBalance)
     const now = Date.now()
     const account: Account = { ...input, id: createId(), currency, createdAt: now, updatedAt: now }
     await db.accounts.add(account)
@@ -40,6 +46,7 @@ export const accountsRepository = {
   },
 
   async update(id: Id, input: AccountInput): Promise<void> {
+    assertInitialBalance(input.initialBalance)
     const updated = await db.accounts.update(id, { ...input, updatedAt: Date.now() })
     if (updated === 0) throw new Error('Счёт не найден')
   },

@@ -1,9 +1,15 @@
 import { db } from '../../db/database'
+import { isNonNegativeMoneyAmount } from '../../utils/money'
 import type { Budget, CategoryBudget, Id, MinorUnits } from '../../types/entities'
 import type { YearMonth } from '../../utils/dates'
 import { budgetIdFor, categoryBudgetIdFor } from './ids'
 
 export { budgetIdFor, categoryBudgetIdFor }
+
+/** Ноль снимает лимит, положительное — ставит; всё остальное (NaN, минус, больше максимума) — ошибка вызывающего. */
+function assertLimit(value: unknown): void {
+  if (!isNonNegativeMoneyAmount(value)) throw new RangeError('Лимит бюджета вне допустимых пределов')
+}
 
 export const budgetsRepository = {
   getForMonth(ym: YearMonth): Promise<Budget | undefined> {
@@ -16,6 +22,7 @@ export const budgetsRepository = {
 
   /** limit = 0 убирает общий бюджет месяца. */
   async setForMonth(ym: YearMonth, totalLimit: MinorUnits): Promise<void> {
+    assertLimit(totalLimit)
     const id = budgetIdFor(ym)
     if (totalLimit <= 0) {
       await db.budgets.delete(id)
@@ -36,6 +43,7 @@ export const categoryBudgetsRepository = {
 
   /** limitAmount = 0 убирает лимит категории на этот месяц. */
   async set(ym: YearMonth, categoryId: Id, limitAmount: MinorUnits): Promise<void> {
+    assertLimit(limitAmount)
     const id = categoryBudgetIdFor(ym, categoryId)
     if (limitAmount <= 0) {
       await db.categoryBudgets.delete(id)

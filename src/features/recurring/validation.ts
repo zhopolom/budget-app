@@ -11,10 +11,12 @@ import type { ValidationResult } from '../../types/validation'
 import { isValidIsoDate } from '../../utils/dates'
 import { Money, PARSE_ERROR_MESSAGES } from '../../utils/money'
 import { isRecurringTransfer } from './model'
+import { MAX_RECURRING_INTERVAL } from './occurrences'
 import type { RecurringInput } from './repository'
 
 export const RECURRING_NOTE_MAX_LENGTH = 120
-export const MAX_INTERVAL = 99
+/** Граница общая с парсером копий — см. occurrences.ts. */
+export const MAX_INTERVAL = MAX_RECURRING_INTERVAL
 
 /**
  * Состояние формы. Поля всех трёх типов держим рядом, чтобы переключение

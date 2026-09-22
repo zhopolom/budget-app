@@ -17,6 +17,13 @@ export interface RecurrenceRule {
 }
 
 /**
+ * Наибольший шаг повтора: «каждые 99 месяцев». Одна граница для формы и для
+ * разбора резервной копии — иначе копия с шагом в миллиард отправит date-fns
+ * в недействительные даты, до которых форма никогда бы не дошла.
+ */
+export const MAX_RECURRING_INTERVAL = 99
+
+/**
  * Сколько вхождений создаётся за один запуск приложения.
  *
  * Ежедневная операция, не открывавшаяся год, дала бы 365 записей за раз.
@@ -86,9 +93,9 @@ function safeStartIndex(rule: RecurrenceRule, date: IsoDate): number {
   return index
 }
 
-/** Шаг меньше одного периода зациклил бы перебор дат. */
+/** Шаг меньше одного периода зациклил бы перебор дат, а слишком большой — уронил бы арифметику дат. */
 function hasUsableInterval(rule: RecurrenceRule): boolean {
-  return Number.isInteger(rule.interval) && rule.interval >= 1
+  return Number.isInteger(rule.interval) && rule.interval >= 1 && rule.interval <= MAX_RECURRING_INTERVAL
 }
 
 /** Ближайшее вхождение не раньше указанной даты. null — расписание уже закончилось. */
