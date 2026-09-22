@@ -5,6 +5,10 @@ import { createBackup, serializeBackup } from '../features/backup/repository'
 import { toCsv } from '../features/backup/csv'
 import { SYSTEM_CATEGORY_IDS as C } from '../features/categories/defaults'
 import { calculateForecast, listUpcoming, UPCOMING_DAYS } from '../features/forecast/service'
+import { parseCsvFile } from '../features/import/csv'
+import { loadExistingFingerprints } from '../features/import/repository'
+import { buildImportRows } from '../features/import/session'
+import { compileRules, pickRule } from '../features/rules/matching'
 import {
   calculateAccountActivity,
   calculateAccountBalances,
@@ -15,7 +19,7 @@ import {
 import { applyFilters, EMPTY_FILTERS } from '../features/transactions/filters'
 import { accountIdsOf } from '../features/transactions/model'
 import { toTransactionViews } from '../features/transactions/views'
-import type { RecurringTransaction, Transaction } from '../types/entities'
+import type { CategoryRule, RecurringTransaction, Transaction } from '../types/entities'
 import { addDaysIso, monthDateRange, toIsoDate, toYearMonth } from '../utils/dates'
 import { Money } from '../utils/money'
 
@@ -120,6 +124,36 @@ function generateRules(today: string): RecurringTransaction[] {
   ]
 }
 
+/** Двадцать правил категорий — больше, чем заведёт обычный пользователь. */
+function generateCategoryRules(): CategoryRule[] {
+  const patterns = ['атб', 'сільпо', 'uber', 'spotify', 'кофе', 'аптека', 'кино', 'rozetka', 'bolt', 'netflix', 'novus', 'wog', 'okko', 'glovo', 'monobank', 'apple', 'google', 'steam', 'ikea', 'zara']
+  return patterns.map((pattern, index) => ({
+    id: `bench-rule-${index}`,
+    name: pattern,
+    enabled: true,
+    matchType: index % 3 === 0 ? 'startsWith' : 'contains',
+    pattern,
+    categoryId: EXPENSE_CATEGORIES[index % EXPENSE_CATEGORIES.length],
+    priority: index,
+    createdAt: index,
+    updatedAt: index,
+  }))
+}
+
+/** CSV на count строк в формате банковской выгрузки: дата; описание; сумма. */
+function generateCsv(count: number): string {
+  const random = lcg(count + 7)
+  const lines = ['Дата;Описание;Сумма']
+  for (let index = 0; index < count; index += 1) {
+    const day = 1 + Math.floor(random() * 28)
+    const month = 1 + Math.floor(random() * 12)
+    const note = NOTES[Math.floor(random() * NOTES.length)] || 'Покупка'
+    const amount = (100 + Math.floor(random() * 300_000)) / 100
+    lines.push(`${String(day).padStart(2, '0')}.${String(month).padStart(2, '0')}.2026;${note} ${index};-${amount.toFixed(2).replace('.', ',')}`)
+  }
+  return lines.join('\r\n')
+}
+
 async function median(run: () => Promise<unknown> | unknown, runs = 3): Promise<number> {
   const samples: number[] = []
   for (let index = 0; index < runs; index += 1) {
@@ -202,6 +236,27 @@ export async function runBenchmark(count: number, today = new Date(2026, 8, 22))
   })
 
   timings['резервная копия'] = await median(async () => serializeBackup(await createBackup(today, 'bench')))
+
+  // Правила категорий: 20 правил против описаний всей истории — как при превью правила
+  const compiled = compileRules(generateCategoryRules())
+  timings['правила × история'] = await median(() => {
+    for (const transaction of rows) if (transaction.type !== 'transfer') pickRule(compiled, transaction.note, DEFAULT_ACCOUNT_IDS.card)
+  })
+
+  // Импорт CSV: разбор файла на 5 000 строк, отпечатки всей истории счёта, сборка превью.
+  // Файл одного размера для всех прогонов: растёт только история, против которой ищутся дубли
+  const csv = generateCsv(5_000)
+  timings['импорт CSV (5 000 строк)'] = await median(async () => {
+    const parsed = parseCsvFile(csv)
+    const existing = await loadExistingFingerprints(DEFAULT_ACCOUNT_IDS.card)
+    buildImportRows(parsed.records, {
+      accountId: DEFAULT_ACCOUNT_IDS.card,
+      mapping: { date: 0, description: 1, amountMode: 'signed', amount: 2, debit: null, credit: null, type: null, category: null, dateFormat: 'DD.MM.YYYY', invertSign: false },
+      rules: compiled,
+      categories,
+      existingFingerprints: existing,
+    })
+  })
 
   return { size: count, timings }
 }
