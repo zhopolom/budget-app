@@ -99,7 +99,9 @@ export function DataSection() {
       title: 'Восстановить из копии?',
       message:
         `${describeCounts(counts)}. Текущие данные на устройстве будут заменены.` +
-        (parsed.schemaVersion < 2 ? ' Копия старого формата будет обновлена автоматически.' : '') +
+        (parsed.migrationSteps.length > 0
+          ? ` Копия формата ${parsed.schemaVersion} будет обновлена до текущего автоматически: суммы и операции не меняются.`
+          : '') +
         describeNormalization(parsed.normalization) +
         (parsed.danglingReferences > 0
           ? ` В копии ${parsed.danglingReferences} ${pluralRu(parsed.danglingReferences, ['запись ссылается', 'записи ссылаются', 'записей ссылаются'])} на удалённые счета или категории. Они не потеряются: операции переедут на «Восстановленный счёт», а регулярные платежи переедут туда же и будут выключены.`

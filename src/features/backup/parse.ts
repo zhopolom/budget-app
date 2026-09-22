@@ -10,10 +10,10 @@ import type {
 } from '../../types/entities'
 import { isValidIsoDate } from '../../utils/dates'
 import { isNonNegativeMoneyAmount, isPositiveMoneyAmount } from '../../utils/money'
-import { categoryBudgetIdFor } from '../budgets/ids'
 import { MAX_RECURRING_INTERVAL } from '../recurring/occurrences'
 import { createDefaultSettings } from '../settings/defaults'
 import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData } from './format'
+import { migrateBackupData } from './migrations'
 import { normalizeBackup, type NormalizationSummary } from './normalize'
 import { validateBackup } from './validate'
 
@@ -26,6 +26,10 @@ import { validateBackup } from './validate'
  *
  * Битые ссылки (операция на удалённый счёт) поводом для отказа не считаются:
  * так бывает и в настоящих данных, приложение это переживает.
+ *
+ * Старые версии формата сначала проходят цепочку миграций (migrations.ts),
+ * и разбор всегда видит данные актуальной версии. Значения по умолчанию
+ * здесь остаются второй линией: они прикрывают файл, отредактированный руками.
  */
 
 export type ParseBackupResult =
@@ -39,6 +43,8 @@ export type ParseBackupResult =
       normalization: NormalizationSummary
       /** Когда копия была снята. null — в файле не было разборчивой даты. */
       exportedAt: number | null
+      /** Через какие версии формата копия прошла перед разбором. Пусто — файл актуальный. */
+      migrationSteps: number[]
     }
   | {
       ok: false
@@ -278,35 +284,6 @@ function parseList<T>(value: unknown, parse: (item: unknown) => T | null, table:
   return result
 }
 
-/** Лимиты категорий v0.1 лежали внутри бюджета — переносим их в отдельную таблицу. */
-function migrateLegacyCategoryLimits(budgets: readonly unknown[]): CategoryBudget[] {
-  const now = Date.now()
-  const moved: CategoryBudget[] = []
-
-  for (const budget of budgets) {
-    if (!isObject(budget) || !Array.isArray(budget.categoryLimits)) continue
-    if (!isMonth(budget.month) || !isYear(budget.year)) continue
-
-    for (const legacy of budget.categoryLimits) {
-      if (!isObject(legacy) || !isId(legacy.categoryId)) continue
-      if (!isPositiveMoneyAmount(legacy.limit)) continue
-
-      const ym = { year: budget.year, month: budget.month }
-      moved.push({
-        id: categoryBudgetIdFor(ym, legacy.categoryId),
-        categoryId: legacy.categoryId,
-        year: budget.year,
-        month: budget.month,
-        limitAmount: legacy.limit,
-        createdAt: now,
-        updatedAt: now,
-      })
-    }
-  }
-
-  return moved
-}
-
 /**
  * Сколько записей в копии ссылается на несуществующие счета или категории.
  * Считаем и операции, и расписания: у правила ссылка на удалённый счёт
@@ -341,8 +318,10 @@ export function parseBackup(text: string): ParseBackupResult {
     return { ok: false, error: 'Копия создана более новой версией Budget — обновите приложение' }
   }
 
-  const source = isObject(raw.data) ? raw.data : raw
-  const budgetsRaw = Array.isArray(source.budgets) ? source.budgets : []
+  // Копия v0.1 могла держать таблицы прямо в корне файла
+  const legacySource = isObject(raw.data) ? raw.data : raw
+  // Сначала — к актуальной версии формата, шаг за шагом; потом — строгий разбор
+  const { data: source, steps } = migrateBackupData(legacySource, schemaVersion)
 
   const accounts = parseList(source.accounts, parseAccount, 'счета')
   if (typeof accounts === 'string') return { ok: false, error: accounts }
@@ -365,16 +344,14 @@ export function parseBackup(text: string): ParseBackupResult {
   const pendingOccurrences = parseList(source.pendingOccurrences, parsePendingOccurrence, 'ожидающие операции')
   if (typeof pendingOccurrences === 'string') return { ok: false, error: pendingOccurrences }
 
-  // Копия v1 лимитов категорий ещё не знала — достаём их из бюджетов.
-  // Дубли не схлопываем: их найдёт validateBackup и откажет от файла целиком
-  const legacyLimits = schemaVersion < 2 ? migrateLegacyCategoryLimits(budgetsRaw) : []
-
+  // Лимиты v1, перенесённые миграцией, могут дублировать друг друга:
+  // дубли не схлопываем, их найдёт validateBackup и откажет от файла целиком
   const parsed: BackupData = {
     accounts,
     categories,
     transactions,
     budgets,
-    categoryBudgets: [...categoryBudgets, ...legacyLimits],
+    categoryBudgets,
     recurringTransactions,
     pendingOccurrences,
     settings: parseSettings(source.settings),
@@ -404,5 +381,6 @@ export function parseBackup(text: string): ParseBackupResult {
     danglingReferences: countDangling(data),
     normalization: summary,
     exportedAt: Number.isFinite(exported) ? exported : null,
+    migrationSteps: steps,
   }
 }
