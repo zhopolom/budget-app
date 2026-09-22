@@ -108,6 +108,20 @@ export function nextOccurrenceOnOrAfter(rule: RecurrenceRule, date: IsoDate): Is
 }
 
 /**
+ * Ближайшее вхождение при возобновлении правила без досоздания.
+ * null — расписание уже закончилось.
+ *
+ * Отсчёт идёт от сегодняшнего дня включительно: пауза кончилась, и если
+ * платёж выпадает на сегодня, он не «пропущен» — он просто наступил.
+ * Эту функцию используют и возобновление, и подсчёт пропущенного, чтобы
+ * два расчёта не разошлись: их расхождение и было багом v0.3.0.
+ */
+export function resumeOccurrence(rule: RecurrenceRule, today: IsoDate): IsoDate | null {
+  const from = rule.startDate > today ? rule.startDate : today
+  return nextOccurrenceOnOrAfter(rule, from)
+}
+
+/**
  * Вхождения в промежутке [from; to] включительно, не больше limit штук.
  * Именно они превращаются в операции при запуске приложения.
  */

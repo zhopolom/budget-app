@@ -1,35 +1,64 @@
 import { shareOrDownloadTextFile, type ShareOutcome } from '../../utils/download'
 import { settingsRepository } from '../settings/repository'
 import { backupFileName } from './format'
-import { createBackup, serializeBackup } from './repository'
+
+/** Готовая к отдаче копия: содержимое собрано заранее, до нажатия кнопки. */
+export interface PreparedBackup {
+  content: string
+  preparedAt: Date
+}
+
+type Deliver = (content: string, fileName: string, mimeType: string) => Promise<ShareOutcome>
 
 /**
- * Сохранить копию: собрать файл, отдать его пользователю и запомнить дату.
+ * Отдать заранее собранную копию и запомнить дату.
+ *
+ * Копию сюда передают готовой намеренно: собрать её — значит прочитать
+ * IndexedDB, а это await, после которого Safari уже не считает вызов
+ * navigator.share ответом на нажатие. Сборка живёт в usePreparedBackup.
  *
  * Отсюда копию сохраняют и настройки, и напоминание на главной — дату
  * последней копии обе записывают одинаково.
  */
-type Deliver = (content: string, fileName: string, mimeType: string) => Promise<ShareOutcome>
-
 export async function exportBackupFile(
-  now: Date,
-  appVersion: string,
+  prepared: PreparedBackup,
   /** Подменяется в тестах: настоящая отдача файла требует браузера. */
   deliver: Deliver = shareOrDownloadTextFile,
 ): Promise<ShareOutcome> {
-  const backup = await createBackup(now, appVersion)
-  const outcome = await deliver(serializeBackup(backup), backupFileName(now, 'json'), 'application/json')
+  // Первым делом — deliver, без единого await перед ним
+  const outcome = await deliver(
+    prepared.content,
+    backupFileName(prepared.preparedAt, 'json'),
+    'application/json',
+  )
 
-  // Отменённое системное окно копией не считается: напоминание должно остаться
-  if (outcome !== 'cancelled') {
-    await settingsRepository.update({ lastBackupAt: now.getTime(), backupReminderSnoozedUntil: null })
+  // Копией считается только то, что действительно дошло до пользователя:
+  // иначе напоминание исчезнет, а копии у человека не будет
+  if (outcome === 'shared' || outcome === 'downloaded') {
+    await settingsRepository.update({
+      lastBackupAt: prepared.preparedAt.getTime(),
+      backupReminderSnoozedUntil: null,
+    })
   }
 
   return outcome
 }
 
-/** Сообщение после сохранения — разное у «Поделиться» и обычного скачивания. */
-export function describeShareOutcome(outcome: ShareOutcome): string | null {
-  if (outcome === 'cancelled') return null
-  return outcome === 'shared' ? 'Копия готова — выберите, куда сохранить' : 'Копия сохранена'
+export interface OutcomeMessage {
+  text: string
+  tone: 'default' | 'error'
+}
+
+/** Сообщение о том, что уже произошло. null — пользователь просто передумал. */
+export function describeShareOutcome(outcome: ShareOutcome): OutcomeMessage | null {
+  switch (outcome) {
+    case 'shared':
+      return { text: 'Копия отправлена', tone: 'default' }
+    case 'downloaded':
+      return { text: 'Копия скачана', tone: 'default' }
+    case 'failed':
+      return { text: 'Не удалось открыть «Поделиться». Попробуйте ещё раз', tone: 'error' }
+    case 'cancelled':
+      return null
+  }
 }

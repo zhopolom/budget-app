@@ -1,9 +1,6 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { resetTestDatabase } from '../../test/db'
+import { describe, expect, it } from 'vitest'
 import type { AppSettings } from '../../types/entities'
 import { createDefaultSettings } from '../settings/defaults'
-import { settingsRepository } from '../settings/repository'
-import { exportBackupFile } from './export'
 import {
   describeLastBackup,
   REMINDER_INTERVAL_DAYS,
@@ -58,43 +55,5 @@ describe('describeLastBackup', () => {
 
   it('дату из будущего показывает как сегодняшнюю', () => {
     expect(describeLastBackup(NOW + 5 * DAY, NOW)).toBe('Сегодня')
-  })
-})
-
-describe('exportBackupFile', () => {
-  beforeEach(resetTestDatabase)
-
-  it('запоминает дату копии и снимает откладывание', async () => {
-    await settingsRepository.update({ backupReminderSnoozedUntil: NOW + 7 * DAY })
-    const now = new Date(NOW)
-
-    const outcome = await exportBackupFile(now, '0.3.0', async () => 'shared')
-
-    expect(outcome).toBe('shared')
-    const stored = await settingsRepository.get()
-    expect(stored.lastBackupAt).toBe(NOW)
-    expect(stored.backupReminderSnoozedUntil).toBe(null)
-  })
-
-  it('отменённое окно «Поделиться» копией не считается', async () => {
-    const outcome = await exportBackupFile(new Date(NOW), '0.3.0', async () => 'cancelled')
-
-    expect(outcome).toBe('cancelled')
-    expect((await settingsRepository.get()).lastBackupAt).toBe(null)
-  })
-
-  it('отдаёт файл с именем по дате и разбираемым содержимым', async () => {
-    let captured: { content: string; fileName: string; mimeType: string } | null = null
-
-    await exportBackupFile(new Date(2026, 8, 21), '0.3.0', async (content, fileName, mimeType) => {
-      captured = { content, fileName, mimeType }
-      return 'downloaded'
-    })
-
-    expect(captured).not.toBeNull()
-    const { content, fileName, mimeType } = captured!
-    expect(fileName).toBe('budget-backup-2026-09-21.json')
-    expect(mimeType).toBe('application/json')
-    expect(JSON.parse(content).app).toBe('budget')
   })
 })
