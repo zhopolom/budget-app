@@ -90,14 +90,14 @@ export function DataSection() {
         `${describeCounts(counts)}. Текущие данные на устройстве будут заменены.` +
         (parsed.schemaVersion < 2 ? ' Копия старого формата будет обновлена автоматически.' : '') +
         (parsed.danglingReferences > 0
-          ? ` В копии ${parsed.danglingReferences} ${pluralRu(parsed.danglingReferences, ['операция ссылается', 'операции ссылаются', 'операций ссылаются'])} на удалённые счета или категории — они сохранятся как есть.`
+          ? ` В копии ${parsed.danglingReferences} ${pluralRu(parsed.danglingReferences, ['запись ссылается', 'записи ссылаются', 'записей ссылаются'])} на удалённые счета или категории. Они не потеряются: операции переедут на «Восстановленный счёт», а регулярные платежи переедут туда же и будут выключены.`
           : ''),
       confirmLabel: 'Восстановить',
       tone: 'danger',
     })
     if (!confirmed) return
 
-    await restoreBackup(parsed.data)
+    const repaired = await restoreBackup(parsed.data)
     // Дата последней копии — дата самого файла: напоминание не должно
     // всплывать сразу после восстановления, но и врать про «сегодня» незачем
     await settingsRepository.update({
@@ -105,6 +105,15 @@ export function DataSection() {
       backupReminderSnoozedUntil: null,
     })
     toast.show('Копия восстановлена')
+
+    // Про выключенные расписания говорим отдельно: полоса на главной
+    // рассказывает только про операции, а молча остановленный платёж —
+    // ровно то, что пользователь заметит через месяц и не поймёт
+    if (repaired.recurring > 0) {
+      toast.show(
+        `${repaired.recurring} ${pluralRu(repaired.recurring, ['регулярная операция ссылалась', 'регулярные операции ссылались', 'регулярных операций ссылались'])} на удалённый счёт — они выключены, выберите им счёт`,
+      )
+    }
   }
 
   const reset = () =>

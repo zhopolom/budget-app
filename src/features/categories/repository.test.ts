@@ -62,7 +62,6 @@ describe('categoriesRepository.remove', () => {
         frequency: 'monthly',
         interval: 1,
         startDate: '2026-09-01',
-        isActive: true,
       },
       '2026-09-21',
     )
@@ -102,7 +101,6 @@ describe('categoriesRepository.replaceAndRemove', () => {
         frequency: 'monthly',
         interval: 1,
         startDate: '2026-09-01',
-        isActive: true,
       },
       '2026-09-21',
     )
@@ -180,7 +178,6 @@ describe('countUsage', () => {
         frequency: 'monthly',
         interval: 1,
         startDate: '2026-09-01',
-        isActive: true,
       },
       '2026-09-21',
     )

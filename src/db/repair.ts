@@ -30,20 +30,59 @@ export interface RepairSummary {
   transactions: number
   /** Правила, у которых переписан счёт (все они выключены). */
   recurring: number
-  /** Операции, у которых категория заменена на «Другое». */
+  /** Записи — операции и правила, — у которых категория заменена на «Другое». */
   categories: number
   /** Создавался ли «Восстановленный счёт» в этом запуске. */
   createdRecoveredAccount: boolean
 }
 
-const EMPTY: RepairSummary = { transactions: 0, recurring: 0, categories: 0, createdRecoveredAccount: false }
+type Record = Transaction | RecurringTransaction
 
-function accountRefsOf(item: Transaction | RecurringTransaction): Id[] {
+function accountRefsOf(item: Record): Id[] {
   return item.type === 'transfer' ? [item.fromAccountId, item.toAccountId] : [item.accountId]
 }
 
-function hasBrokenAccount(item: Transaction | RecurringTransaction, accounts: ReadonlySet<Id>): boolean {
+function hasBrokenAccount(item: Record, accounts: ReadonlySet<Id>): boolean {
   return accountRefsOf(item).some((id) => !accounts.has(id))
+}
+
+/** Что именно пришлось починить в записи. null — с записью всё в порядке. */
+interface Repaired<T extends Record> {
+  record: T
+  accountFixed: boolean
+  categoryFixed: boolean
+}
+
+function repairRecord<T extends Record>(
+  item: T,
+  accounts: ReadonlySet<Id>,
+  categories: ReadonlySet<Id>,
+  now: number,
+): Repaired<T> | null {
+  let record = item
+  let accountFixed = false
+  let categoryFixed = false
+
+  if (hasBrokenAccount(item, accounts)) {
+    const keep = (id: Id) => (accounts.has(id) ? id : RECOVERED_ACCOUNT_ID)
+    record =
+      record.type === 'transfer'
+        ? { ...record, fromAccountId: keep(record.fromAccountId), toAccountId: keep(record.toAccountId), updatedAt: now }
+        : { ...record, accountId: keep(record.accountId), updatedAt: now }
+    accountFixed = true
+  }
+
+  // У перевода категории нет; у расхода и дохода мёртвая категория ломает
+  // и списки, и лимиты, и аналитику — подставляем «Другое» того же типа
+  if (record.type !== 'transfer' && !categories.has(record.categoryId)) {
+    const fallback = record.type === 'expense' ? SYSTEM_CATEGORY_IDS.expenseOther : SYSTEM_CATEGORY_IDS.incomeOther
+    if (categories.has(fallback)) {
+      record = { ...record, categoryId: fallback, updatedAt: now }
+      categoryFixed = true
+    }
+  }
+
+  return accountFixed || categoryFixed ? { record, accountFixed, categoryFixed } : null
 }
 
 export async function repairDanglingReferences(tx: DexieTransaction): Promise<RepairSummary> {
@@ -56,82 +95,52 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
 
   const accountIds = new Set(accounts.map((account) => account.id))
   const categoryIds = new Set(categories.map((category) => category.id))
-
-  const brokenTransactions = transactions.filter((item) => hasBrokenAccount(item, accountIds))
-  const brokenRules = rules.filter((rule) => hasBrokenAccount(rule, accountIds))
-  const brokenCategories = transactions.filter(
-    (item) => item.type !== 'transfer' && !categoryIds.has(item.categoryId),
-  )
-
-  if (brokenTransactions.length === 0 && brokenRules.length === 0 && brokenCategories.length === 0) {
-    return EMPTY
-  }
-
   const now = Date.now()
-  let createdRecoveredAccount = false
 
-  if (brokenTransactions.length > 0 || brokenRules.length > 0) {
-    if (!accountIds.has(RECOVERED_ACCOUNT_ID)) {
-      const settings = (await tx.table('settings').get('app')) as AppSettings | undefined
-      await tx.table('accounts').put({
-        id: RECOVERED_ACCOUNT_ID,
-        name: 'Восстановленный счёт',
-        type: 'other',
-        initialBalance: 0,
-        currency: settings?.baseCurrency ?? 'UAH',
-        createdAt: now,
-        updatedAt: now,
-      } satisfies Account)
-      createdRecoveredAccount = true
-      accountIds.add(RECOVERED_ACCOUNT_ID)
-    }
+  const summary: RepairSummary = { transactions: 0, recurring: 0, categories: 0, createdRecoveredAccount: false }
 
-    for (const item of brokenTransactions) {
-      await tx.table('transactions').put(withRepairedAccounts(item, accountIds, now))
-    }
+  // Счёт создаём, только если есть что на него переносить
+  const needsRecoveredAccount =
+    transactions.some((item) => hasBrokenAccount(item, accountIds)) ||
+    rules.some((rule) => hasBrokenAccount(rule, accountIds))
 
-    for (const rule of brokenRules) {
-      // Правило выключаем: пусть пользователь сам решит, куда его направить
-      await tx.table('recurringTransactions').put({
-        ...withRepairedAccounts(rule, accountIds, now),
-        isActive: false,
-      })
-    }
+  if (needsRecoveredAccount && !accountIds.has(RECOVERED_ACCOUNT_ID)) {
+    const settings = (await tx.table('settings').get('app')) as AppSettings | undefined
+    await tx.table('accounts').put({
+      id: RECOVERED_ACCOUNT_ID,
+      name: 'Восстановленный счёт',
+      type: 'other',
+      initialBalance: 0,
+      currency: settings?.baseCurrency ?? 'UAH',
+      createdAt: now,
+      updatedAt: now,
+    } satisfies Account)
+    summary.createdRecoveredAccount = true
+    accountIds.add(RECOVERED_ACCOUNT_ID)
   }
 
-  // Битые категории — защита на будущее: в v0.2 они не встречались
-  let repairedCategories = 0
-  for (const item of brokenCategories) {
-    if (item.type === 'transfer') continue
-    const fallback = item.type === 'expense' ? SYSTEM_CATEGORY_IDS.expenseOther : SYSTEM_CATEGORY_IDS.incomeOther
-    if (!categoryIds.has(fallback)) continue
+  for (const item of transactions) {
+    const fixed = repairRecord(item, accountIds, categoryIds, now)
+    if (!fixed) continue
 
-    const repaired = brokenTransactions.includes(item)
-      ? ((await tx.table('transactions').get(item.id)) as Transaction | undefined)
-      : item
-    if (!repaired || repaired.type === 'transfer') continue
-
-    await tx.table('transactions').put({ ...repaired, categoryId: fallback, updatedAt: now })
-    repairedCategories += 1
+    await tx.table('transactions').put(fixed.record)
+    if (fixed.accountFixed) summary.transactions += 1
+    if (fixed.categoryFixed) summary.categories += 1
   }
 
-  return {
-    transactions: brokenTransactions.length,
-    recurring: brokenRules.length,
-    categories: repairedCategories,
-    createdRecoveredAccount,
-  }
-}
+  for (const rule of rules) {
+    const fixed = repairRecord(rule, accountIds, categoryIds, now)
+    if (!fixed) continue
 
-function withRepairedAccounts<T extends Transaction | RecurringTransaction>(
-  item: T,
-  accounts: ReadonlySet<Id>,
-  now: number,
-): T {
-  const keep = (id: Id) => (accounts.has(id) ? id : RECOVERED_ACCOUNT_ID)
+    // Правило с битым счётом выключаем: куда его направить, решает пользователь.
+    // Из-за одной лишь категории останавливать расписание не за что — «Другое» подходит
+    await tx
+      .table('recurringTransactions')
+      .put(fixed.accountFixed ? { ...fixed.record, isActive: false } : fixed.record)
 
-  if (item.type === 'transfer') {
-    return { ...item, fromAccountId: keep(item.fromAccountId), toAccountId: keep(item.toAccountId), updatedAt: now }
+    if (fixed.accountFixed) summary.recurring += 1
+    if (fixed.categoryFixed) summary.categories += 1
   }
-  return { ...item, accountId: keep(item.accountId), updatedAt: now }
+
+  return summary
 }

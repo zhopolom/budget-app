@@ -22,7 +22,6 @@ const addRule = (accountId: Id, startDate = '2026-12-01') =>
       frequency: 'monthly',
       interval: 1,
       startDate,
-      isActive: true,
     },
     '2026-09-21',
   )
@@ -38,7 +37,6 @@ const addTransferRule = (fromAccountId: Id, toAccountId: Id, startDate = '2026-1
       frequency: 'monthly',
       interval: 1,
       startDate,
-      isActive: true,
     },
     '2026-09-21',
   )
@@ -148,6 +146,16 @@ describe('transferAndRemove со ссылками из расписаний', ()
     // И главное: новых бессмысленных переводов он больше не создаёт
     await recurringRepository.generateDue('2026-12-31')
     expect(await db.transactions.count()).toBe(0)
+  })
+
+  it('не трогает чужой перевод внутри счёта, которого этот перенос не касался', async () => {
+    // На «Карте» уже висит перевод сам на себя — след прошлого объединения
+    const alien = await seedTransferRule(card, card, '2026-09-01')
+
+    const result = await accountsRepository.transferAndRemove(cash, card)
+
+    expect(result.stoppedRecurring).toEqual([])
+    expect((await db.recurringTransactions.get(alien))?.isActive).toBe(true)
   })
 
   it('атомарен: сбой на удалении откатывает и перенос правил', async () => {

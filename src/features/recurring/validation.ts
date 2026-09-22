@@ -19,6 +19,9 @@ export const MAX_INTERVAL = 99
 /**
  * Состояние формы. Поля всех трёх типов держим рядом, чтобы переключение
  * «Расход / Доход / Перевод» не стирало уже введённое — как в форме операции.
+ *
+ * Активности здесь нет: ею управляет кнопка «Отключить/Включить» рядом с формой,
+ * а черновик снимается один раз при открытии шторки и о нажатии кнопки не узнает.
  */
 export interface RecurringDraft {
   type: TransactionType
@@ -33,7 +36,6 @@ export interface RecurringDraft {
   startDate: IsoDate
   /** Пустая строка — повторять бессрочно. */
   endDate: string
-  isActive: boolean
 }
 
 export type RecurringField =
@@ -86,7 +88,6 @@ export function validateRecurringDraft(
     startDate: draft.startDate,
     // Поле необязательное: пустую строку в базу не пишем
     ...(endDate === '' ? {} : { endDate }),
-    isActive: draft.isActive,
   }
 
   const failed = (): ValidationResult<RecurringInput, RecurringField> => ({ ok: false, errors })
@@ -122,7 +123,6 @@ export function draftFromRecurring(recurring: RecurringTransaction): RecurringDr
     intervalText: String(recurring.interval),
     startDate: recurring.startDate,
     endDate: recurring.endDate ?? '',
-    isActive: recurring.isActive,
   }
 
   if (isRecurringTransfer(recurring)) {
@@ -159,6 +159,5 @@ export function emptyRecurringDraft(accountId: Id | null, today: IsoDate): Recur
     intervalText: '1',
     startDate: today,
     endDate: '',
-    isActive: true,
   }
 }

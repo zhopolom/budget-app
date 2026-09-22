@@ -1,18 +1,18 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { db } from '../../db/database'
 import { resetTestDatabase } from '../../test/db'
-import type { Id } from '../../types/entities'
+import type { Id, IsoDate, RecurringTransfer } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { DEFAULT_ACCOUNT_IDS } from '../accounts/defaults'
 import { accountsRepository } from '../accounts/repository'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
 import { recurringRepository } from './repository'
 import type { RecurringEntryInput } from './repository'
+import { draftFromRecurring, validateRecurringDraft, type RecurringDraft } from './validation'
 
 /**
- * Регрессии на два бага v0.2. Тесты написаны до исправления и падали:
- * первый оставлял в базе операцию на удалённый счёт, второй досоздавал
- * платежи за время паузы.
+ * Регрессии на два бага v0.2 и на то, что нашёл ревью v0.3.
+ * Каждый тест написан до исправления и падал.
  */
 
 const { card, cash } = DEFAULT_ACCOUNT_IDS
@@ -26,7 +26,6 @@ const subscription = (patch: Partial<RecurringEntryInput> = {}): RecurringEntryI
   frequency: 'monthly',
   interval: 1,
   startDate: '2026-01-14',
-  isActive: true,
   ...patch,
 })
 
@@ -39,10 +38,28 @@ async function seedRule(patch: Partial<RecurringEntryInput> & { nextOccurrence?:
     ...base,
     id,
     nextOccurrence: nextOccurrence ?? base.startDate,
+    isActive: true,
     createdAt: 1,
     updatedAt: 1,
   })
   return id
+}
+
+/** Черновик, каким его снимает форма в момент открытия шторки. */
+async function openForm(id: Id): Promise<RecurringDraft> {
+  const rule = await recurringRepository.get(id)
+  if (!rule) throw new Error('Правило не найдено')
+  return draftFromRecurring(rule)
+}
+
+/** Нажатие «Сохранить» с тем черновиком, который форма держит в useState. */
+async function saveForm(id: Id, draft: RecurringDraft, today: IsoDate): Promise<void> {
+  const result = validateRecurringDraft(draft, {
+    categories: await db.categories.toArray(),
+    accounts: await db.accounts.toArray(),
+  })
+  if (!result.ok) throw new Error(`Форма не прошла валидацию: ${JSON.stringify(result.errors)}`)
+  await recurringRepository.update(id, result.value, today)
 }
 
 /** Операции, чей счёт не существует, — то, чего в базе быть не должно никогда. */
@@ -114,18 +131,19 @@ describe('баг 2: возобновление после паузы досоз�
     expect((await db.recurringTransactions.get(id))?.nextOccurrence).toBe('2026-10-14')
   })
 
-  it('с backfill пропущенное создаётся явно', async () => {
+  it('с backfill пропущенное создаётся сразу, а не при следующем запуске', async () => {
     const id = await seedRule({ startDate: '2026-01-14' })
     await recurringRepository.generateDue('2026-01-20')
 
     await recurringRepository.setActive(id, false, '2026-01-20')
-    await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })
-
-    const result = await recurringRepository.generateDue('2026-09-20')
-
     // Февраль–сентябрь, январь уже создан
-    expect(result.created).toBe(8)
+    const created = await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })
+
+    expect(created).toBe(8)
     expect(await recurringRepository.countGenerated(id)).toBe(9)
+
+    // Приложение перезапускать не надо: досоздавать уже нечего
+    expect((await recurringRepository.generateDue('2026-09-20')).created).toBe(0)
   })
 
   it('countMissed показывает, сколько платежей пропущено за паузу', async () => {
@@ -135,5 +153,118 @@ describe('баг 2: возобновление после паузы досоз�
 
     expect(await recurringRepository.countMissed(id, '2026-09-20')).toBe(8)
     expect(await recurringRepository.countMissed(id, '2026-01-20')).toBe(0)
+  })
+
+  it('countMissed не считает вхождения, которые уже созданы', async () => {
+    const id = await seedRule({ startDate: '2026-01-14' })
+    // Сегодняшний платёж уже создан — пропущенным он не считается
+    await recurringRepository.generateDue('2026-01-14')
+    await recurringRepository.setActive(id, false, '2026-01-14')
+
+    expect(await recurringRepository.countMissed(id, '2026-01-14')).toBe(0)
+  })
+
+  it('«Не создавать» не создаёт платёж и в день вхождения', async () => {
+    const id = await seedRule({ startDate: '2026-01-14', nextOccurrence: '2026-02-14' })
+    await recurringRepository.setActive(id, false, '2026-02-01')
+
+    // 14 сентября — день вхождения: он входит в число пропущенных, от которых отказались
+    expect(await recurringRepository.countMissed(id, '2026-09-14')).toBe(8)
+    await recurringRepository.setActive(id, true, '2026-09-14')
+
+    expect((await recurringRepository.generateDue('2026-09-14')).created).toBe(0)
+    expect((await db.recurringTransactions.get(id))?.nextOccurrence).toBe('2026-10-14')
+  })
+
+  it('countMissed не занижает число из-за лимита одного прохода', async () => {
+    // Ежедневное правило на паузе почти два года: больше 400 вхождений
+    const id = await seedRule({ frequency: 'daily', startDate: '2025-01-01', nextOccurrence: '2025-01-01' })
+    await recurringRepository.setActive(id, false, '2025-01-01')
+
+    const missed = await recurringRepository.countMissed(id, '2026-09-20')
+    expect(missed).toBe(628)
+
+    // И досоздаёт ровно столько, сколько назвал
+    expect(await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })).toBe(missed)
+  })
+})
+
+describe('найдено ревью: единственный владелец флага активности', () => {
+  it('сохранение формы не отменяет паузу, нажатую в той же шторке', async () => {
+    const id = await seedRule({ startDate: '2026-01-14' })
+    // Пользователь открыл правило — форма сняла черновик с активного правила
+    const draft = await openForm(id)
+
+    await recurringRepository.setActive(id, false, '2026-09-20')
+    // …и, не закрывая шторку, поправил сумму и нажал «Сохранить»
+    await saveForm(id, { ...draft, amountText: '250' }, '2026-09-20')
+
+    const rule = await db.recurringTransactions.get(id)
+    expect(rule?.isActive).toBe(false)
+    expect(rule?.amount).toBe(Money.fromMajor(250))
+    expect((await recurringRepository.generateDue('2026-12-31')).created).toBe(0)
+  })
+
+  it('сохранение формы не отменяет только что подтверждённое досоздание', async () => {
+    const id = await seedRule({ startDate: '2026-01-14' })
+    await recurringRepository.generateDue('2026-01-20')
+    await recurringRepository.setActive(id, false, '2026-01-20')
+
+    const draft = await openForm(id)
+    const created = await recurringRepository.setActive(id, true, '2026-09-20', { backfill: true })
+    expect(created).toBe(8)
+
+    await saveForm(id, { ...draft, amountText: '250' }, '2026-09-20')
+
+    const rule = await db.recurringTransactions.get(id)
+    expect(rule?.isActive).toBe(true)
+    // Обещанные платежи никуда не делись
+    expect(await recurringRepository.countGenerated(id)).toBe(9)
+  })
+})
+
+describe('найдено ревью: перевод внутри одного счёта не воскресает', () => {
+  /** Регулярный перевод, сведённый к одному счёту удалением второго. */
+  async function seedCollapsedTransfer(): Promise<Id> {
+    const id = 'rule-transfer'
+    await db.recurringTransactions.add({
+      id,
+      type: 'transfer',
+      amount: Money.fromMajor(2_000),
+      fromAccountId: cash,
+      toAccountId: card,
+      note: 'На накопительный',
+      frequency: 'monthly',
+      interval: 1,
+      startDate: '2026-01-05',
+      nextOccurrence: '2026-01-05',
+      isActive: true,
+      createdAt: 1,
+      updatedAt: 1,
+    } satisfies RecurringTransfer)
+
+    await accountsRepository.transferAndRemove(cash, card)
+    return id
+  }
+
+  it('кнопка «Включить» отказывается включать такое правило', async () => {
+    const id = await seedCollapsedTransfer()
+    expect((await db.recurringTransactions.get(id))?.isActive).toBe(false)
+
+    await expect(recurringRepository.setActive(id, true, '2026-09-20')).rejects.toThrow('один счёт')
+    expect((await db.recurringTransactions.get(id))?.isActive).toBe(false)
+  })
+
+  it('даже включённое другим путём, оно не создаёт операций', async () => {
+    const id = await seedCollapsedTransfer()
+    // Как если бы флаг подняли в обход setActive — например старой версией кода
+    await db.recurringTransactions.update(id, { isActive: true })
+
+    const result = await recurringRepository.generateDue('2026-09-20')
+
+    expect(result.created).toBe(0)
+    expect(await db.transactions.count()).toBe(0)
+    // И правило снова выключено: создавать ему нечего
+    expect((await db.recurringTransactions.get(id))?.isActive).toBe(false)
   })
 })
