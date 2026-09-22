@@ -75,9 +75,9 @@ describe('accountsRepository.transferAndRemove', () => {
     await Promise.all([addExpense(cash, 100), addExpense(cash, 250), addExpense(card, 40)])
     const balanceBefore = await totalBalance()
 
-    const moved = await accountsRepository.transferAndRemove(cash, card)
+    const { movedTransactions } = await accountsRepository.transferAndRemove(cash, card)
 
-    expect(moved).toBe(2)
+    expect(movedTransactions).toBe(2)
     expect(await db.accounts.get(cash)).toBeUndefined()
     expect(await db.transactions.where('accountId').equals(cash).count()).toBe(0)
     expect(await db.transactions.where('accountId').equals(card).count()).toBe(3)
@@ -144,9 +144,9 @@ describe('счёт с переводами', () => {
     const balanceBefore = await totalBalance()
     const countBefore = await db.transactions.count()
 
-    const moved = await accountsRepository.transferAndRemove(card, savings.id)
+    const { movedTransactions } = await accountsRepository.transferAndRemove(card, savings.id)
 
-    expect(moved).toBe(3)
+    expect(movedTransactions).toBe(3)
     expect(await db.transactions.count()).toBe(countBefore)
     expect(await db.accounts.get(card)).toBeUndefined()
     expect(await transactionsRepository.countByAccount(card)).toBe(0)

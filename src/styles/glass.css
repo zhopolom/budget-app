@@ -122,6 +122,22 @@
 }
 
 /*
+ * Ступени размытия для режима диагностики. Нужны, чтобы на живом iPhone
+ * увидеть, сколько кадров стоит blur, а не гадать об этом.
+ */
+:root[data-glass-blur='low'] {
+  --glass-blur-subtle: 4px;
+  --glass-blur-regular: 6px;
+  --glass-blur-prominent: 8px;
+}
+
+:root[data-glass-blur='off'] .glass {
+  background: var(--glass-solid);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+/*
  * Фон под стеклом не должен быть плоским, иначе материал не читается.
  * Два очень мягких пятна на весь экран — спокойно для финансового приложения
  * и стоит один градиент, без canvas и анимаций.

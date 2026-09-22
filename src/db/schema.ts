@@ -35,3 +35,15 @@ export const SCHEMA_V2 = {
   categoryBudgets: 'id, &[year+month+categoryId], categoryId, [year+month]',
   recurringTransactions: 'id, nextOccurrence, createdAt',
 } as const satisfies Record<string, string>
+
+/**
+ * v3 — регулярные переводы и ссылки на счета у расписаний.
+ *
+ * Индексы по accountId, fromAccountId, toAccountId и categoryId нужны, чтобы
+ * удаление счёта и категории находило зависимые правила запросом к индексу,
+ * а не перебором всей таблицы. Ровно из-за их отсутствия в v2 удаление счёта
+ * вообще не замечало расписаний.
+ */
+export const SCHEMA_V3 = {
+  recurringTransactions: 'id, nextOccurrence, createdAt, accountId, fromAccountId, toAccountId, categoryId',
+} as const satisfies Record<string, string>

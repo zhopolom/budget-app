@@ -1,4 +1,10 @@
 import { useMemo, useState, type FormEvent } from 'react'
+import { Button } from '../../components/Button/Button'
+import { CategoryPicker } from '../../components/CategoryPicker/CategoryPicker'
+import { ChipGroup } from '../../components/ChipGroup/ChipGroup'
+import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
+import { TextField } from '../../components/TextField/TextField'
+import { useToast } from '../../components/Toast/toastContext'
 import { ACCOUNT_TYPE_ICONS } from '../../features/accounts/labels'
 import { describeRecurrence } from '../../features/recurring/occurrences'
 import type { RecurringInput } from '../../features/recurring/repository'
@@ -9,22 +15,17 @@ import {
   type RecurringDraft,
 } from '../../features/recurring/validation'
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
-import type { TransactionEditorData } from '../../features/transactions/useTransactionEditorData'
 import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
-import { Button } from '../../components/Button/Button'
-import { CategoryPicker } from '../../components/CategoryPicker/CategoryPicker'
-import { ChipGroup } from '../../components/ChipGroup/ChipGroup'
-import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
-import { TextField } from '../../components/TextField/TextField'
-import { useToast } from '../../components/Toast/toastContext'
-import type { EntryType, Id, RecurrenceFrequency } from '../../types/entities'
+import type { TransactionEditorData } from '../../features/transactions/useTransactionEditorData'
+import type { Id, RecurrenceFrequency, TransactionType } from '../../types/entities'
 import { Money } from '../../utils/money'
 import styles from './RecurringForm.module.css'
 
 const TYPE_OPTIONS = [
   { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
-] as const satisfies readonly { value: EntryType; label: string }[]
+  { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
+] as const satisfies readonly { value: TransactionType; label: string }[]
 
 const FREQUENCY_CHIPS = [
   { value: 'daily', label: 'День' },
@@ -48,9 +49,14 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
   const [usage] = useState(data.categoryUsage)
   const toast = useToast()
 
+  const isTransfer = draft.type === 'transfer'
+
   const categories = useMemo(
-    () => sortCategoriesByUsage(data.categories.filter((category) => category.type === draft.type), usage),
-    [data.categories, usage, draft.type],
+    () =>
+      isTransfer
+        ? []
+        : sortCategoriesByUsage(data.categories.filter((category) => category.type === draft.type), usage),
+    [data.categories, usage, draft.type, isTransfer],
   )
 
   const accountChips = useMemo(
@@ -62,9 +68,18 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
   const errors = attempted && !result.ok ? result.errors : {}
   const update = (patch: Partial<RecurringDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
-  const changeType = (type: EntryType) => {
+  const changeType = (type: TransactionType) => {
+    if (type === 'transfer') {
+      // Счёт, который уже выбран, становится счётом-источником
+      update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })
+      return
+    }
     const keepsCategory = data.categories.some((category) => category.id === draft.categoryId && category.type === type)
-    update({ type, categoryId: keepsCategory ? draft.categoryId : null })
+    update({
+      type,
+      categoryId: keepsCategory ? draft.categoryId : null,
+      accountId: draft.accountId ?? draft.fromAccountId,
+    })
   }
 
   const handleSubmit = async (event: FormEvent) => {
@@ -101,27 +116,57 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
         error={errors.amount}
       />
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Категория</h3>
-        <CategoryPicker
-          categories={categories}
-          value={draft.categoryId}
-          onChange={(categoryId: Id) => update({ categoryId })}
-          error={errors.category}
-        />
-      </section>
+      {isTransfer ? (
+        <>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Откуда</h3>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.fromAccountId}
+              onChange={(fromAccountId) => update({ fromAccountId })}
+              label="Счёт списания"
+              layout="scroll"
+            />
+            {errors.fromAccount && <p className={styles.error}>{errors.fromAccount}</p>}
+          </section>
 
-      <section className={styles.section}>
-        <h3 className={styles.sectionTitle}>Счёт</h3>
-        <ChipGroup
-          chips={accountChips}
-          value={draft.accountId}
-          onChange={(accountId) => update({ accountId })}
-          label="Счёт"
-          layout="scroll"
-        />
-        {errors.account && <p className={styles.error}>{errors.account}</p>}
-      </section>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Куда</h3>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.toAccountId}
+              onChange={(toAccountId) => update({ toAccountId })}
+              label="Счёт зачисления"
+              layout="scroll"
+            />
+            {errors.toAccount && <p className={styles.error}>{errors.toAccount}</p>}
+          </section>
+        </>
+      ) : (
+        <>
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Категория</h3>
+            <CategoryPicker
+              categories={categories}
+              value={draft.categoryId}
+              onChange={(categoryId: Id) => update({ categoryId })}
+              error={errors.category}
+            />
+          </section>
+
+          <section className={styles.section}>
+            <h3 className={styles.sectionTitle}>Счёт</h3>
+            <ChipGroup
+              chips={accountChips}
+              value={draft.accountId}
+              onChange={(accountId) => update({ accountId })}
+              label="Счёт"
+              layout="scroll"
+            />
+            {errors.account && <p className={styles.error}>{errors.account}</p>}
+          </section>
+        </>
+      )}
 
       <section className={styles.section}>
         <h3 className={styles.sectionTitle}>Повтор</h3>
@@ -142,16 +187,14 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
             onChange={(event) => update({ intervalText: event.target.value.replace(/\D/g, '').slice(0, 2) })}
             error={errors.interval}
           />
-          <p className={styles.hint}>
-            {scheduleHint ?? `Число от 1 до ${MAX_INTERVAL}`}
-          </p>
+          <p className={styles.hint}>{scheduleHint ?? `Число от 1 до ${MAX_INTERVAL}`}</p>
         </div>
       </section>
 
       <div className={styles.fields}>
         <TextField
           label="Комментарий"
-          placeholder="Например, Spotify"
+          placeholder={isTransfer ? 'Например, На отпуск' : 'Например, Spotify'}
           value={draft.note}
           maxLength={RECURRING_NOTE_MAX_LENGTH}
           autoComplete="off"
@@ -179,26 +222,12 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
         <Button type="submit" block disabled={busy}>
           {mode === 'create' ? 'Создать' : 'Сохранить'}
         </Button>
-        {mode === 'edit' && (
-          <Button
-            variant="secondary"
-            block
-            onClick={() => update({ isActive: !draft.isActive })}
-            disabled={busy}
-          >
-            {draft.isActive ? 'Отключить' : 'Включить'}
-          </Button>
-        )}
         {onDelete && (
           <Button variant="danger" block onClick={onDelete} disabled={busy}>
             Удалить
           </Button>
         )}
       </div>
-
-      {mode === 'edit' && !draft.isActive && (
-        <p className={styles.note}>Отключённая операция не создаётся, пока вы её не включите. Уже созданные остаются.</p>
-      )}
     </form>
   )
 }

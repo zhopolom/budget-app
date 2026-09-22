@@ -31,9 +31,15 @@ interface ValidationContext {
   accounts: readonly Account[]
 }
 
+/**
+ * @param baseline Черновик, с которого началось редактирование. Передаётся
+ * только в режиме правки: он нужен, чтобы отличить уже существующий перевод
+ * внутри счёта от попытки создать новый такой перевод.
+ */
 export function validateTransactionDraft(
   draft: TransactionDraft,
   { categories, accounts }: ValidationContext,
+  baseline?: TransactionDraft,
 ): ValidationResult<TransactionInput, TransactionField> {
   const errors: Partial<Record<TransactionField, string>> = {}
 
@@ -53,9 +59,18 @@ export function validateTransactionDraft(
     const from = accounts.find((account) => account.id === draft.fromAccountId)
     const to = accounts.find((account) => account.id === draft.toAccountId)
 
+    // Счета могли свести в один при удалении — тогда старый перевод стал
+    // переводом внутри счёта. Событие уже произошло, менять его задним числом
+    // нечем: запрет на сохранение заблокировал бы и правку комментария.
+    // Но стоит пользователю тронуть счета — правило «откуда ≠ куда» возвращается.
+    const keptSelfTransfer =
+      baseline?.type === 'transfer' &&
+      baseline.fromAccountId === draft.fromAccountId &&
+      baseline.toAccountId === draft.toAccountId
+
     if (!from) errors.fromAccount = 'Выберите счёт'
     if (!to) errors.toAccount = 'Выберите счёт'
-    if (from && to && from.id === to.id) errors.toAccount = 'Выберите другой счёт'
+    if (from && to && from.id === to.id && !keptSelfTransfer) errors.toAccount = 'Выберите другой счёт'
     if (from && to && from.currency !== to.currency) errors.toAccount = 'Счета в разных валютах'
 
     if (Object.keys(errors).length > 0 || !parsed.ok || !from || !to) return failed()

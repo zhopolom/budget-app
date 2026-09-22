@@ -3,6 +3,7 @@ import { navigate } from '../../app/navigation'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
 import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
+import { isUnlocked, NO_TAPS, registerTap, tapHint } from '../../features/diagnostics/taps'
 import { settingsRepository } from '../../features/settings/repository'
 import { useSettings } from '../../features/settings/useSettings'
 import type { ThemePreference } from '../../types/entities'
@@ -14,6 +15,9 @@ import styles from './SettingsPage.module.css'
 // В production-сборку не попадает: import.meta.env.DEV заменяется на false
 const DevTools = import.meta.env.DEV ? lazy(() => import('../../dev/DevTools')) : null
 
+// Диагностика есть и в production, но грузится только когда её открыли
+const DiagnosticsPanel = lazy(() => import('./DiagnosticsPanel'))
+
 const THEME_OPTIONS = [
   { value: 'system', label: 'Как в системе' },
   { value: 'light', label: 'Светлая' },
@@ -23,7 +27,11 @@ const THEME_OPTIONS = [
 export function SettingsPage() {
   const settings = useSettings()
   const [currencyOpen, setCurrencyOpen] = useState(false)
+  const [taps, setTaps] = useState(NO_TAPS)
   const currency = settings?.baseCurrency ?? 'UAH'
+
+  const diagnosticsOpen = isUnlocked(taps)
+  const hint = tapHint(taps)
 
   return (
     <div className={styles.page}>
@@ -81,7 +89,22 @@ export function SettingsPage() {
         </Suspense>
       )}
 
-      <p className={styles.version}>Budget {__APP_VERSION__}</p>
+      {diagnosticsOpen && (
+        <Suspense fallback={null}>
+          <DiagnosticsPanel onClose={() => setTaps(NO_TAPS)} />
+        </Suspense>
+      )}
+
+      {/* Семь нажатий открывают диагностику. Обычному человеку кнопка не мешает:
+          выглядит как подпись и ничего не делает */}
+      <button
+        type="button"
+        className={styles.version}
+        onClick={() => setTaps((current) => registerTap(current, Date.now()))}
+      >
+        Budget {__APP_VERSION__}
+        {hint && <span className={styles.tapHint}> · {hint}</span>}
+      </button>
 
       <CurrencySheet open={currencyOpen} value={currency} onClose={() => setCurrencyOpen(false)} />
     </div>

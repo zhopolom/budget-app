@@ -1,14 +1,26 @@
 import { db } from '../../db/database'
-import type { Account, CurrencyCode, Id, Timestamp } from '../../types/entities'
+import type { Account, CurrencyCode, Id, RecurringTransaction, Timestamp } from '../../types/entities'
 import { createId } from '../../utils/id'
 import { Money } from '../../utils/money'
 import { SETTINGS_ID } from '../settings/defaults'
 import type { AccountInput } from './validation'
 
+/** Что осталось после переноса операций на другой счёт. */
+export interface TransferAndRemoveResult {
+  movedTransactions: number
+  movedRecurring: number
+  /**
+   * Регулярные переводы, у которых после переноса обе стороны свелись к одному
+   * счёту. Такие выключаются: создавать переводы «внутри счёта» нельзя.
+   */
+  stoppedRecurring: RecurringTransaction[]
+}
+
 /**
  * Правило удаления счетов:
- * операции никогда не удаляются каскадно. Счёт с операциями удаляется только
- * через transferAndRemove — после переноса всех операций на другой счёт.
+ * операции никогда не удаляются каскадно. Счёт с операциями или регулярными
+ * платежами удаляется только через transferAndRemove — после переноса всего,
+ * что на него ссылается.
  */
 export const accountsRepository = {
   listAll(): Promise<Account[]> {
@@ -31,15 +43,27 @@ export const accountsRepository = {
     if (updated === 0) throw new Error('Счёт не найден')
   },
 
-  /** Удаляет счёт без операций. Если операции есть — ошибка, ничего не меняется. */
+  /**
+   * Сколько операций и регулярных платежей ссылается на счёт.
+   * Правило считается, если счёт стоит в любом из трёх полей.
+   */
+  async countUsage(id: Id): Promise<{ transactions: number; recurring: number }> {
+    const [transactions, recurring] = await Promise.all([countTransactionsOf(id), countRecurringOf(id)])
+    return { transactions, recurring }
+  },
+
+  /** Удаляет счёт, на который ничего не ссылается. Иначе — ошибка, ничего не меняется. */
   async remove(id: Id): Promise<void> {
-    await db.transaction('rw', db.accounts, db.transactions, db.settings, async () => {
+    await db.transaction('rw', db.accounts, db.transactions, db.recurringTransactions, db.settings, async () => {
       if ((await db.accounts.count()) <= 1) throw new Error('Нельзя удалить единственный счёт')
 
       // Проверка внутри той же транзакции: между подсчётом и удалением
       // никто не успеет добавить операцию на этот счёт
-      const count = await countTransactionsOf(id)
-      if (count > 0) throw new Error('На счёте есть операции — перенесите их на другой счёт')
+      const usage = await accountsRepository.countUsage(id)
+      if (usage.transactions > 0) throw new Error('На счёте есть операции — перенесите их на другой счёт')
+      if (usage.recurring > 0) {
+        throw new Error('Счёт используется в регулярных операциях — выберите, куда их перенести')
+      }
 
       await db.accounts.delete(id)
       await replaceLastAccount(id, null)
@@ -47,30 +71,31 @@ export const accountsRepository = {
   },
 
   /**
-   * Переносит все операции счёта на другой счёт и удаляет исходный.
-   * Всё выполняется в одной транзакции Dexie: любая ошибка откатывает
-   * и перенос, и удаление — половина операций на старом счёте остаться не может.
+   * Переносит всё, что ссылается на счёт, — операции и регулярные платежи —
+   * на другой счёт и удаляет исходный.
+   *
+   * Всё выполняется в одной транзакции Dexie: любая ошибка откатывает и
+   * перенос, и удаление — половина операций на старом счёте остаться не может.
    *
    * Начальный остаток тоже переходит на целевой счёт: иначе его операции
    * окажутся без стартовой суммы, а общий баланс изменится.
-   *
-   * Возвращает число перенесённых операций.
    */
-  async transferAndRemove(sourceId: Id, targetId: Id): Promise<number> {
+  async transferAndRemove(sourceId: Id, targetId: Id): Promise<TransferAndRemoveResult> {
     if (sourceId === targetId) throw new Error('Выберите другой счёт')
 
-    return db.transaction('rw', db.accounts, db.transactions, db.settings, async () => {
+    return db.transaction('rw', db.accounts, db.transactions, db.recurringTransactions, db.settings, async () => {
       const [source, target] = await Promise.all([db.accounts.get(sourceId), db.accounts.get(targetId)])
       if (!source) throw new Error('Счёт не найден')
       if (!target) throw new Error('Счёт для переноса не найден')
       if (source.currency !== target.currency) throw new Error('Счета в разных валютах')
 
       const now = Date.now()
-      const moved = await moveTransactions(sourceId, targetId, now)
+      const movedTransactions = await moveTransactions(sourceId, targetId, now)
+      const { moved: movedRecurring, stopped } = await moveRecurring(sourceId, targetId, now)
 
       // Контрольная проверка перед удалением: исключение здесь откатит всё
-      const left = await countTransactionsOf(sourceId)
-      if (left !== 0) throw new Error('Перенос операций не завершён')
+      const left = await accountsRepository.countUsage(sourceId)
+      if (left.transactions !== 0 || left.recurring !== 0) throw new Error('Перенос операций не завершён')
 
       await db.accounts.update(targetId, {
         initialBalance: Money.add(target.initialBalance, source.initialBalance),
@@ -79,7 +104,7 @@ export const accountsRepository = {
       await db.accounts.delete(sourceId)
       await replaceLastAccount(sourceId, targetId)
 
-      return moved
+      return { movedTransactions, movedRecurring, stoppedRecurring: stopped }
     })
   },
 }
@@ -96,8 +121,20 @@ function countTransactionsOf(accountId: Id): Promise<number> {
     .count()
 }
 
+/** То же для регулярных операций: индексы по трём полям заведены в схеме v3. */
+function countRecurringOf(accountId: Id): Promise<number> {
+  return db.recurringTransactions
+    .where('accountId')
+    .equals(accountId)
+    .or('fromAccountId')
+    .equals(accountId)
+    .or('toAccountId')
+    .equals(accountId)
+    .count()
+}
+
 /**
- * Переписывает ссылки на счёт во всех трёх полях. Возвращает число затронутых операций.
+ * Переписывает ссылки на счёт во всех трёх полях операций.
  *
  * Перевод, обе стороны которого после переноса ведут на один счёт, остаётся в
  * истории как перевод «внутри счёта»: он и так даёт нулевой вклад в остаток,
@@ -138,6 +175,62 @@ async function moveTransactions(sourceId: Id, targetId: Id, now: Timestamp): Pro
     })
 
   return touched.size
+}
+
+/**
+ * То же для расписаний. Регулярный перевод, у которого обе стороны свелись к
+ * одному счёту, выключается: в отличие от истории, он бы создавал новые
+ * бессмысленные операции каждый месяц.
+ */
+async function moveRecurring(
+  sourceId: Id,
+  targetId: Id,
+  now: Timestamp,
+): Promise<{ moved: number; stopped: RecurringTransaction[] }> {
+  const touched = new Set<Id>()
+
+  await db.recurringTransactions
+    .where('accountId')
+    .equals(sourceId)
+    .modify((rule) => {
+      if (rule.type === 'transfer') return
+      rule.accountId = targetId
+      rule.updatedAt = now
+      touched.add(rule.id)
+    })
+
+  await db.recurringTransactions
+    .where('fromAccountId')
+    .equals(sourceId)
+    .modify((rule) => {
+      if (rule.type !== 'transfer') return
+      rule.fromAccountId = targetId
+      rule.updatedAt = now
+      touched.add(rule.id)
+    })
+
+  await db.recurringTransactions
+    .where('toAccountId')
+    .equals(sourceId)
+    .modify((rule) => {
+      if (rule.type !== 'transfer') return
+      rule.toAccountId = targetId
+      rule.updatedAt = now
+      touched.add(rule.id)
+    })
+
+  const stopped: RecurringTransaction[] = []
+  await db.recurringTransactions
+    .where('fromAccountId')
+    .equals(targetId)
+    .modify((rule) => {
+      if (rule.type !== 'transfer' || rule.toAccountId !== targetId || !rule.isActive) return
+      rule.isActive = false
+      rule.updatedAt = now
+      stopped.push({ ...rule })
+    })
+
+  return { moved: touched.size, stopped }
 }
 
 /** Если удалённый счёт был «последним выбранным» — подставляем замену. */

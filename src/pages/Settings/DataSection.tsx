@@ -1,17 +1,20 @@
+import { useLiveQuery } from 'dexie-react-hooks'
 import { useRef, useState } from 'react'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { useConfirm } from '../../components/Confirm/confirmContext'
 import { useToast } from '../../components/Toast/toastContext'
 import { toCsv, UTF8_BOM } from '../../features/backup/csv'
+import { describeShareOutcome, exportBackupFile } from '../../features/backup/export'
 import { backupFileName, countBackup, type BackupCounts } from '../../features/backup/format'
 import { parseBackup } from '../../features/backup/parse'
-import { createBackup, resetAllData, restoreBackup, serializeBackup } from '../../features/backup/repository'
+import { describeLastBackup } from '../../features/backup/reminder'
+import { resetAllData, restoreBackup } from '../../features/backup/repository'
 import { accountsRepository } from '../../features/accounts/repository'
 import { categoriesRepository } from '../../features/categories/repository'
 import { settingsRepository } from '../../features/settings/repository'
 import { transactionsRepository } from '../../features/transactions/repository'
 import { toTransactionViews } from '../../features/transactions/views'
-import { downloadTextFile, readFileAsText } from '../../utils/download'
+import { readFileAsText, shareOrDownloadTextFile } from '../../utils/download'
 import { pluralRu } from '../../utils/plural'
 import styles from './SettingsPage.module.css'
 
@@ -20,6 +23,10 @@ export function DataSection() {
   const [busy, setBusy] = useState(false)
   const toast = useToast()
   const confirm = useConfirm()
+  const lastBackup = useLiveQuery(
+    async () => describeLastBackup((await settingsRepository.get()).lastBackupAt, Date.now()),
+    [],
+  )
 
   const run = async (action: () => Promise<void>) => {
     if (busy) return
@@ -35,10 +42,8 @@ export function DataSection() {
 
   const saveBackup = () =>
     run(async () => {
-      const now = new Date()
-      const backup = await createBackup(now, __APP_VERSION__)
-      downloadTextFile(serializeBackup(backup), backupFileName(now, 'json'), 'application/json')
-      toast.show('Копия сохранена')
+      const message = describeShareOutcome(await exportBackupFile(new Date(), __APP_VERSION__))
+      if (message) toast.show(message)
     })
 
   const exportCsv = () =>
@@ -59,8 +64,9 @@ export function DataSection() {
       const sorted = [...transactions].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt - b.createdAt)
       const csv = UTF8_BOM + toCsv(toTransactionViews(sorted, categories, accounts), settings.baseCurrency)
 
-      downloadTextFile(csv, backupFileName(new Date(), 'csv'), 'text/csv')
-      toast.show('CSV выгружен')
+      const outcome = await shareOrDownloadTextFile(csv, backupFileName(new Date(), 'csv'), 'text/csv')
+      if (outcome === 'shared') toast.show('Таблица готова — выберите, куда сохранить')
+      else if (outcome === 'downloaded') toast.show('CSV выгружен')
     })
 
   const pickFile = () => {
@@ -92,6 +98,12 @@ export function DataSection() {
     if (!confirmed) return
 
     await restoreBackup(parsed.data)
+    // Дата последней копии — дата самого файла: напоминание не должно
+    // всплывать сразу после восстановления, но и врать про «сегодня» незачем
+    await settingsRepository.update({
+      lastBackupAt: parsed.exportedAt ?? Date.now(),
+      backupReminderSnoozedUntil: null,
+    })
     toast.show('Копия восстановлена')
   }
 
@@ -116,6 +128,10 @@ export function DataSection() {
       <h2 className={styles.sectionTitle}>Данные</h2>
 
       <ListCard label="Данные">
+        <ListItem>
+          {/* undefined — настройки ещё читаются: лучше пустое место, чем «Ещё не сохраняли» на миг */}
+          <ListRow icon="🗓️" title="Последняя копия" value={lastBackup} />
+        </ListItem>
         <ListItem>
           <ListRow icon="💾" title="Сохранить копию" subtitle="JSON со всеми данными" onClick={saveBackup} />
         </ListItem>

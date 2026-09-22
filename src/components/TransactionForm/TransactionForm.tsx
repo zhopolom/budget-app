@@ -70,7 +70,9 @@ export function TransactionForm({
     [data.accounts],
   )
 
-  const result = validateTransactionDraft(draft, data)
+  // В режиме правки исходный черновик — точка отсчёта: он разрешает сохранить
+  // перевод внутри счёта, если счета в нём не трогали
+  const result = validateTransactionDraft(draft, data, mode === 'edit' ? initial : undefined)
   // Ошибки показываем только после первой попытки сохранить — и дальше обновляем на лету
   const errors = attempted && !result.ok ? result.errors : {}
 

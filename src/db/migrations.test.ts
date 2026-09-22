@@ -95,12 +95,12 @@ beforeEach(async () => {
 })
 
 describe('миграция v1 → v2', () => {
-  it('поднимает версию базы до 2', async () => {
+  it('поднимает версию базы до последней', async () => {
     await writeV1Database()
     const upgraded = await openUpgraded()
 
-    expect(DB_VERSION).toBe(2)
-    expect(upgraded.verno).toBe(2)
+    expect(DB_VERSION).toBe(3)
+    expect(upgraded.verno).toBe(3)
     upgraded.close()
   })
 
@@ -159,10 +159,10 @@ describe('миграция v1 → v2', () => {
     upgraded.close()
   })
 
-  it('на пустом устройстве создаёт базу сразу v2 со значениями по умолчанию', async () => {
+  it('на пустом устройстве создаёт базу сразу последней версии со значениями по умолчанию', async () => {
     const fresh = await openUpgraded()
 
-    expect(fresh.verno).toBe(2)
+    expect(fresh.verno).toBe(DB_VERSION)
     expect(await fresh.accounts.count()).toBe(2)
     expect(await fresh.categories.count()).toBeGreaterThan(0)
     expect(await fresh.settings.get('app')).toBeDefined()

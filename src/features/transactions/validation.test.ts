@@ -118,6 +118,40 @@ describe('перевод', () => {
   })
 })
 
+describe('правка перевода внутри счёта', () => {
+  // Такой перевод появляется сам: два счёта свели в один при удалении
+  const self = (patch: Partial<TransactionDraft> = {}) =>
+    draft({ type: 'transfer', amountText: '500', fromAccountId: 'card', toAccountId: 'card', ...patch })
+
+  it('сохраняется, если счета не трогали', () => {
+    const baseline = self()
+    const result = validateTransactionDraft(self({ note: 'Банкомат' }), CONTEXT, baseline)
+
+    expect(result).toEqual({
+      ok: true,
+      value: {
+        type: 'transfer',
+        amount: Money.fromMajor(500),
+        fromAccountId: 'card',
+        toAccountId: 'card',
+        date: '2026-09-21',
+        note: 'Банкомат',
+      },
+    })
+  })
+
+  it('снова требует разные счета, как только счёт поменяли', () => {
+    const baseline = self()
+    const result = validateTransactionDraft(self({ fromAccountId: 'cash', toAccountId: 'cash' }), CONTEXT, baseline)
+
+    expect(result.ok === false && result.errors.toAccount).toBe('Выберите другой счёт')
+  })
+
+  it('создать новый перевод внутри счёта по-прежнему нельзя', () => {
+    expect(validateTransactionDraft(self(), CONTEXT).ok).toBe(false)
+  })
+})
+
 describe('draftFromTransaction', () => {
   it('раскладывает перевод обратно в поля формы', () => {
     const result = draftFromTransaction({
