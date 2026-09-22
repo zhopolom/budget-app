@@ -10,6 +10,14 @@ import {
 } from '../../features/budgets/calculations'
 import { budgetsRepository, categoryBudgetsRepository } from '../../features/budgets/repository'
 import { categoriesRepository } from '../../features/categories/repository'
+import {
+  calculateForecast,
+  listUpcoming,
+  UPCOMING_DAYS,
+  type Forecast,
+  type UpcomingOccurrence,
+} from '../../features/forecast/service'
+import { recurringRepository } from '../../features/recurring/repository'
 import { settingsRepository } from '../../features/settings/repository'
 import {
   calculateCategoryTotals,
@@ -19,10 +27,20 @@ import {
 } from '../../features/transactions/calculations'
 import { transactionsRepository } from '../../features/transactions/repository'
 import { toTransactionViews, type TransactionView } from '../../features/transactions/views'
-import type { CurrencyCode, IsoDate, MinorUnits } from '../../types/entities'
-import { fromIsoDate, monthDateRange, monthKey, type YearMonth } from '../../utils/dates'
+import type { Account, Category, CurrencyCode, IsoDate, MinorUnits } from '../../types/entities'
+import {
+  addDaysIso,
+  fromIsoDate,
+  isSameYearMonth,
+  monthDateRange,
+  monthKey,
+  yearMonthOf,
+  type YearMonth,
+} from '../../utils/dates'
 
 const RECENT_LIMIT = 8
+/** Сколько ближайших регулярных операций показывать на главной. */
+const UPCOMING_LIMIT = 5
 
 export interface DashboardData {
   month: YearMonth
@@ -33,6 +51,12 @@ export interface DashboardData {
   categoryBudgets: CategoryBudgetProgress[]
   categoryLimitsTotal: MinorUnits
   recent: TransactionView[]
+  /** Прогноз до конца месяца. null — выбран не текущий месяц: прогнозировать прошлое нечего. */
+  forecast: Forecast | null
+  /** Ближайшие регулярные операции; пусто для не текущего месяца. */
+  upcoming: UpcomingOccurrence[]
+  accounts: Account[]
+  categories: Category[]
 }
 
 async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<DashboardData> {
@@ -42,9 +66,9 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
   // Одна read-транзакция: все цифры считаются по согласованному снимку базы
   return db.transaction(
     'r',
-    [db.settings, db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets],
+    [db.settings, db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions],
     async () => {
-      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits] =
+      const [settings, accounts, categories, allTransactions, monthTransactions, recent, budget, limits, rules] =
         await Promise.all([
           settingsRepository.get(),
           accountsRepository.listAll(),
@@ -56,10 +80,13 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
           db.transactions.orderBy('[date+createdAt]').reverse().limit(RECENT_LIMIT).toArray(),
           budgetsRepository.getForMonth(month),
           categoryBudgetsRepository.listForMonth(month),
+          recurringRepository.listAll(),
         ])
 
       const monthTotals = calculateTotals(monthTransactions)
       const spentByCategory = calculateCategoryTotals(monthTransactions)
+      // Прогноз и ближайшие операции — про «сейчас»: для прошлых и будущих месяцев их нет
+      const isCurrentMonth = isSameYearMonth(month, yearMonthOf(today))
 
       return {
         month,
@@ -70,6 +97,18 @@ async function loadDashboardData(month: YearMonth, today: IsoDate): Promise<Dash
         categoryBudgets: buildCategoryBudgetProgress(limits, spentByCategory, categories),
         categoryLimitsTotal: totalCategoryLimits(limits),
         recent: toTransactionViews(recent, categories, accounts),
+        forecast: isCurrentMonth
+          ? calculateForecast({
+              today,
+              accounts,
+              transactions: allTransactions,
+              rules,
+              monthlyLimit: budget?.totalLimit ?? null,
+            })
+          : null,
+        upcoming: isCurrentMonth ? listUpcoming(rules, today, addDaysIso(today, UPCOMING_DAYS), UPCOMING_LIMIT) : [],
+        accounts,
+        categories,
       }
     },
   )

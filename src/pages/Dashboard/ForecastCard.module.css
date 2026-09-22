@@ -1,0 +1,79 @@
+.card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.title {
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
+.rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 0;
+}
+
+.row dt {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.row dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row dd[data-tone='positive'] {
+  color: var(--positive);
+}
+
+.row dd[data-tone='muted'] {
+  color: var(--ink-2);
+  font-weight: 500;
+}
+
+/* Итог отделён линией и крупнее: ради него карточка и существует */
+.row[data-total] {
+  margin-top: 4px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.row[data-total] dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.row[data-total] dd {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.row dd[data-negative] {
+  color: var(--negative);
+}
+
+.note {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}

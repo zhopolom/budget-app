@@ -1,0 +1,44 @@
+.header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.title {
+  font-size: 20px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding-left: 16px;
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--accent-text);
+}
+
+.amount {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.amount[data-type='income'] {
+  color: var(--positive);
+}
+
+.amount[data-type='transfer'] {
+  color: var(--ink-2);
+}
+
+.note {
+  margin-top: 8px;
+  padding: 0 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
