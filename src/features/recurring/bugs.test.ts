@@ -165,6 +165,7 @@ describe('баг 2: возобновление после паузы досоз�
       missed: 0,
       dueToday: false,
       finished: false,
+      truncated: false,
     })
   })
 

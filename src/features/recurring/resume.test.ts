@@ -68,6 +68,7 @@ describe('resumeInfo', () => {
       missed: 7,
       dueToday: true,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -78,6 +79,7 @@ describe('resumeInfo', () => {
       missed: 8,
       dueToday: false,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -89,6 +91,7 @@ describe('resumeInfo', () => {
       missed: 0,
       dueToday: false,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -100,6 +103,7 @@ describe('resumeInfo', () => {
       missed: 4,
       dueToday: false,
       finished: true,
+      truncated: false,
     })
   })
 })

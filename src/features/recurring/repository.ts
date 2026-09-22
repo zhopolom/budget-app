@@ -3,10 +3,12 @@ import { db } from '../../db/database'
 import type { Id, IsoDate, RecurringEntry, RecurringTransaction, RecurringTransfer, Transaction } from '../../types/entities'
 import { addDaysIso } from '../../utils/dates'
 import { createId } from '../../utils/id'
+import { isPositiveMoneyAmount } from '../../utils/money'
 import { isSelfTransferRule } from './model'
 import {
   MAX_BACKFILL_OCCURRENCES,
   MAX_OCCURRENCES_PER_RUN,
+  MAX_RECURRING_INTERVAL,
   nextOccurrenceOnOrAfter,
   occurrencesBetween,
   resumeOccurrence,
@@ -34,6 +36,11 @@ export interface ResumeInfo {
   dueToday: boolean
   /** Расписание закончилось: возобновлять нечего, досоздать — можно. */
   finished: boolean
+  /**
+   * Пропущенного больше, чем считаем за раз: missed — это потолок одного
+   * досоздания, а не точное число. Остаток досоздастся при следующих запусках.
+   */
+  truncated: boolean
 }
 
 export interface GenerationResult {
@@ -110,6 +117,14 @@ function transactionFromRule(rule: RecurringTransaction, date: IsoDate, now: num
   return { ...base, type: rule.type, accountId: rule.accountId, categoryId: rule.categoryId }
 }
 
+/** Последняя проверка перед записью: сумма и шаг повтора в тех же границах, что у формы и парсера копий. */
+function assertRecurringInput(input: RecurringInput): void {
+  if (!isPositiveMoneyAmount(input.amount)) throw new RangeError('Сумма регулярной операции вне допустимых пределов')
+  if (!Number.isInteger(input.interval) || input.interval < 1 || input.interval > MAX_RECURRING_INTERVAL) {
+    throw new RangeError(`Шаг повтора должен быть от 1 до ${MAX_RECURRING_INTERVAL}`)
+  }
+}
+
 export const recurringRepository = {
   /** Ближайшие по сроку — первыми. */
   listAll(): Promise<RecurringTransaction[]> {
@@ -121,6 +136,7 @@ export const recurringRepository = {
   },
 
   async create(input: RecurringInput, today: IsoDate): Promise<RecurringTransaction> {
+    assertRecurringInput(input)
     const now = Date.now()
     // Первое вхождение — не раньше начала расписания и не раньше сегодняшнего дня,
     // иначе создание правила задним числом сразу нарисовало бы гору операций
@@ -147,6 +163,7 @@ export const recurringRepository = {
    * его могла поменять кнопка «Отключить» — форма об этом не знает.
    */
   async update(id: Id, input: RecurringInput, today: IsoDate): Promise<void> {
+    assertRecurringInput(input)
     await db.transaction('rw', db.recurringTransactions, async () => {
       const existing = await db.recurringTransactions.get(id)
       if (!existing) throw new Error('Регулярная операция не найдена')
@@ -234,21 +251,24 @@ export const recurringRepository = {
    */
   async resumeInfo(id: Id, today: IsoDate): Promise<ResumeInfo> {
     const rule = await db.recurringTransactions.get(id)
-    if (!rule) return { missed: 0, dueToday: false, finished: false }
+    if (!rule) return { missed: 0, dueToday: false, finished: false, truncated: false }
 
     const resume = resumeOccurrence(rule, today)
     // Расписание закончилось — пропущено всё несозданное до конца расписания
     const until = resume ?? today
 
-    const dates = occurrencesBetween(rule, rule.nextOccurrence, until, MAX_BACKFILL_OCCURRENCES)
+    // Берём на одно вхождение больше потолка: так видно, что за потолком что-то есть
+    const dates = occurrencesBetween(rule, rule.nextOccurrence, until, MAX_BACKFILL_OCCURRENCES + 1)
     const already = await generatedDatesOf(id)
     const fresh = dates.filter((date) => !already.has(date))
+    const missedAll = resume === null ? fresh : fresh.filter((date) => date < resume)
 
     return {
-      missed: resume === null ? fresh.length : fresh.filter((date) => date < resume).length,
+      missed: Math.min(missedAll.length, MAX_BACKFILL_OCCURRENCES),
       // Если сегодняшний платёж уже создан, обещать его было бы неправдой
       dueToday: resume === today && !already.has(today),
       finished: resume === null,
+      truncated: missedAll.length > MAX_BACKFILL_OCCURRENCES,
     }
   },
 
