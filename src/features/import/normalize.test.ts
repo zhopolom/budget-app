@@ -35,6 +35,10 @@ describe('detectDateFormats', () => {
     expect(detectDateFormats(['', '21.09.2026', ''])).toEqual(['DD.MM.YYYY'])
     expect(detectDateFormats([])).toEqual([])
   })
+
+  it('одна битая дата не ломает формат: она станет ошибкой строки', () => {
+    expect(detectDateFormats(['21.09.2026', '22.09.2026', '31.02.2026'])).toEqual(['DD.MM.YYYY'])
+  })
 })
 
 describe('parseAmount', () => {

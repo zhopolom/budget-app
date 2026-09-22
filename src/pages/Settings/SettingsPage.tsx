@@ -10,6 +10,7 @@ import type { ThemePreference } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { CurrencySheet } from './CurrencySheet'
 import { DataSection } from './DataSection'
+import { ImportSection } from './ImportSection'
 import styles from './SettingsPage.module.css'
 
 // В production-сборку не попадает: import.meta.env.DEV заменяется на false
@@ -74,6 +75,8 @@ export function SettingsPage() {
           </ListItem>
         </ListCard>
       </section>
+
+      <ImportSection />
 
       <DataSection />
 

@@ -63,13 +63,23 @@ export function parseDateWith(text: string, format: DateFormat): IsoDate | null 
 }
 
 /**
- * Форматы, в которых читается каждая непустая дата выборки. Один — формат
- * известен; несколько (03/04/2026) — спросить пользователя; ноль — колонка не дата.
+ * Форматы, в которых читается больше половины непустых дат выборки — и все
+ * они читаются одинаково хорошо. Один — формат известен; несколько
+ * (03/04/2026) — спросить пользователя; ноль — колонка не дата.
+ * Одна опечатка вроде «31.02.2026» формат не ломает: такая строка станет
+ * ошибкой в превью, а не причиной отказа от всего файла.
  */
 export function detectDateFormats(samples: readonly string[]): DateFormat[] {
   const values = samples.map((sample) => sample.trim()).filter((sample) => sample !== '')
   if (values.length === 0) return []
-  return DATE_FORMATS.filter((format) => values.every((value) => parseDateWith(value, format) !== null))
+
+  const scores = DATE_FORMATS.map((format) => ({
+    format,
+    parsed: values.filter((value) => parseDateWith(value, format) !== null).length,
+  }))
+  const best = Math.max(...scores.map((score) => score.parsed))
+  if (best * 2 <= values.length) return []
+  return scores.filter((score) => score.parsed === best).map((score) => score.format)
 }
 
 export type AmountParse = { ok: true; value: MinorUnits } | { ok: false; reason: 'empty' | 'invalid' | 'tooLarge' }

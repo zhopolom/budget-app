@@ -197,6 +197,22 @@ export function assignCategory(row: ImportRow, categoryId: Id | null): ImportRow
   return next
 }
 
+/** Новое правило, созданное из превью, докладывает категории строкам, у которых её ещё нет. Ручной выбор не трогается. */
+export function applyRulesToRows(
+  rows: readonly ImportRow[],
+  rules: readonly CompiledRule[],
+  categories: readonly Category[],
+  accountId: Id,
+): ImportRow[] {
+  const categoryById = new Map(categories.map((category) => [category.id, category]))
+  return rows.map((row) => {
+    if (row.categoryId !== null || row.status === 'error' || !row.type) return row
+    const rule = pickRule(rules, row.description, accountId)
+    if (!rule || categoryById.get(rule.categoryId)?.type !== row.type) return row
+    return { ...assignCategory(row, rule.categoryId), ruleId: rule.id }
+  })
+}
+
 export function setInclude(row: ImportRow, include: boolean): ImportRow {
   if (row.status === 'error') return row
   return { ...row, include }
