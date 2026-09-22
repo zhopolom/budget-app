@@ -233,6 +233,7 @@ describe('повторный ремонт', () => {
       orphanOccurrences: 0,
       goals: 0,
       templateLimits: 0,
+      rules: 0,
     })
     expect(await upgraded.accounts.toArray()).toEqual(before.accounts)
     expect(await upgraded.transactions.toArray()).toEqual(before.transactions)

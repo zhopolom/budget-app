@@ -4,6 +4,7 @@ import { createId } from '../../utils/id'
 import { isNonNegativeMoneyAmount, Money } from '../../utils/money'
 import { detachGoalsFromAccount } from '../goals/repository'
 import { isSelfTransferRule } from '../recurring/model'
+import { categoryRulesRepository } from '../rules/repository'
 import { SETTINGS_ID } from '../settings/defaults'
 import { calculateAccountBalances } from '../transactions/calculations'
 import type { AccountInput } from './validation'
@@ -87,7 +88,7 @@ export const accountsRepository = {
   async remove(id: Id): Promise<void> {
     await db.transaction(
       'rw',
-      [db.accounts, db.transactions, db.recurringTransactions, db.savingsGoals, db.settings],
+      [db.accounts, db.transactions, db.recurringTransactions, db.savingsGoals, db.categoryRules, db.settings],
       async () => {
         if ((await db.accounts.count()) <= 1) throw new Error('Нельзя удалить единственный счёт')
 
@@ -103,6 +104,7 @@ export const accountsRepository = {
         if (!account) throw new Error('Счёт не найден')
         // Операций нет, поэтому остаток — это начальный остаток
         await detachGoalsFromAccount(id, { keepAmount: account.initialBalance }, Date.now())
+        await categoryRulesRepository.replaceAccount(id, null)
 
         await db.accounts.delete(id)
         await replaceLastAccount(id, null)
@@ -125,7 +127,7 @@ export const accountsRepository = {
 
     return db.transaction(
       'rw',
-      [db.accounts, db.transactions, db.recurringTransactions, db.savingsGoals, db.settings],
+      [db.accounts, db.transactions, db.recurringTransactions, db.savingsGoals, db.categoryRules, db.settings],
       async () => {
         const [source, target] = await Promise.all([db.accounts.get(sourceId), db.accounts.get(targetId)])
         if (!source) throw new Error('Счёт не найден')
@@ -148,6 +150,7 @@ export const accountsRepository = {
 
         const movedTransactions = await moveTransactions(sourceId, targetId, now)
         const { moved: movedRecurring, stopped } = await moveRecurring(sourceId, targetId, now)
+        await categoryRulesRepository.replaceAccount(sourceId, targetId)
 
         // Контрольная проверка перед удалением: исключение здесь откатит всё
         const left = await accountsRepository.countUsage(sourceId)

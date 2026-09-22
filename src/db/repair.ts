@@ -5,6 +5,7 @@ import type {
   AppSettings,
   BudgetTemplate,
   Category,
+  CategoryRule,
   Id,
   PendingOccurrence,
   RecurringTransaction,
@@ -47,6 +48,8 @@ export interface RepairSummary {
   goals: number
   /** Лимиты шаблонов на удалённые категории: сняты. */
   templateLimits: number
+  /** Правила категорий на удалённую категорию удалены, ограничение по удалённому счёту снято. */
+  rules: number
 }
 
 type Record = Transaction | RecurringTransaction
@@ -156,6 +159,31 @@ async function dropOrphanTemplateLimits(tx: DexieTransaction, categories: Readon
   return dropped
 }
 
+/** Правило без категории применять некуда — удаляем; без счёта — снимаем ограничение по счёту. */
+async function repairRules(
+  tx: DexieTransaction,
+  accounts: ReadonlySet<Id>,
+  categories: ReadonlySet<Id>,
+  now: number,
+): Promise<number> {
+  const table = tx.table('categoryRules')
+  const rules = (await table.toArray()) as CategoryRule[]
+  let fixed = 0
+  for (const rule of rules) {
+    if (!categories.has(rule.categoryId)) {
+      await table.delete(rule.id)
+      fixed += 1
+      continue
+    }
+    if (rule.accountId !== undefined && !accounts.has(rule.accountId)) {
+      const { accountId: _dropped, ...rest } = rule
+      await table.put({ ...rest, updatedAt: now } satisfies CategoryRule)
+      fixed += 1
+    }
+  }
+  return fixed
+}
+
 export async function repairDanglingReferences(tx: DexieTransaction): Promise<RepairSummary> {
   const [accounts, categories, transactions, rules] = await Promise.all([
     tx.table('accounts').toArray() as Promise<Account[]>,
@@ -178,6 +206,7 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
     orphanOccurrences: 0,
     goals: 0,
     templateLimits: 0,
+    rules: 0,
   }
 
   // Сначала категории: без «Другого» чинить битые категории было бы нечем
@@ -239,6 +268,9 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
   }
   if (tx.idbtrans.objectStoreNames.contains('budgetTemplates')) {
     summary.templateLimits = await dropOrphanTemplateLimits(tx, categoryIds, now)
+  }
+  if (tx.idbtrans.objectStoreNames.contains('categoryRules')) {
+    summary.rules = await repairRules(tx, accountIds, categoryIds, now)
   }
 
   return summary

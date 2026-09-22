@@ -2,6 +2,7 @@ import { db } from '../../db/database'
 import type { Category, Id } from '../../types/entities'
 import { createId } from '../../utils/id'
 import { templatesRepository } from '../budgets/templatesRepository'
+import { categoryRulesRepository } from '../rules/repository'
 import type { CategoryInput } from './validation'
 
 async function getCustom(id: Id): Promise<Category> {
@@ -51,7 +52,7 @@ export const categoriesRepository = {
   async remove(id: Id): Promise<void> {
     await db.transaction(
       'rw',
-      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates],
+      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates, db.categoryRules],
       async () => {
       await getCustom(id)
 
@@ -64,6 +65,8 @@ export const categoriesRepository = {
 
       await db.categoryBudgets.where('categoryId').equals(id).delete()
       await templatesRepository.dropCategory(id)
+      // Правило на удалённую категорию применять некуда
+      await categoryRulesRepository.replaceCategory(id, null)
       await db.categories.delete(id)
       },
     )
@@ -82,7 +85,7 @@ export const categoriesRepository = {
 
     return db.transaction(
       'rw',
-      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates],
+      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates, db.categoryRules],
       async () => {
       const source = await getCustom(sourceId)
       const target = await db.categories.get(targetId)
@@ -117,6 +120,8 @@ export const categoriesRepository = {
       // переносить их на чужой лимит значило бы молча изменить бюджет
       await db.categoryBudgets.where('categoryId').equals(sourceId).delete()
       await templatesRepository.dropCategory(sourceId)
+      // Правила едут за операциями: они и дальше должны класть описание туда же, куда переехала история
+      await categoryRulesRepository.replaceCategory(sourceId, targetId)
       await db.categories.delete(sourceId)
 
       return moved
