@@ -27,10 +27,17 @@ export function useRecurringGeneration(today: IsoDate): void {
     void recurringRepository
       .generateDue(today)
       .then((result) => {
-        if (cancelled || result.created === 0) return
-        toast.show(
-          `Добавлено ${result.created} ${pluralRu(result.created, ['регулярная операция', 'регулярные операции', 'регулярных операций'])}`,
-        )
+        if (cancelled) return
+        if (result.created > 0) {
+          toast.show(
+            `Добавлено ${result.created} ${pluralRu(result.created, ['регулярная операция', 'регулярные операции', 'регулярных операций'])}`,
+          )
+        }
+        if (result.pending > 0) {
+          toast.show(
+            `${result.pending} ${pluralRu(result.pending, ['операция ждёт подтверждения', 'операции ждут подтверждения', 'операций ждут подтверждения'])}`,
+          )
+        }
       })
       .catch(() => {
         // Не блокируем запуск: расписания досоздадутся при следующем открытии

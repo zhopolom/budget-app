@@ -111,6 +111,9 @@ export function RecurringPage() {
       const created = await recurringRepository.setActive(recurring.id, true, today, { backfill })
       if (created === 0) {
         toast.show('Регулярная операция включена')
+      } else if (recurring.executionMode === 'confirm') {
+        // В режиме подтверждения досозданное — это вхождения, которые ждут решения на главной
+        toast.show(`${payments(created)} ${created === 1 ? 'ждёт' : 'ждут'} подтверждения на главной`)
       } else {
         toast.show(`Создано ${payments(created)}${info.finished ? ', расписание закончилось' : ''}`)
       }
@@ -223,6 +226,7 @@ export function RecurringPage() {
 
 function subtitleFor(item: RecurringTransaction, today: IsoDate): string {
   const schedule = describeRecurrence(item.frequency, item.interval)
-  if (!item.isActive) return `${schedule} · отключена`
-  return `${schedule} · следующая ${formatFutureDay(item.nextOccurrence, today).toLowerCase()}`
+  const mode = item.executionMode === 'confirm' ? ' · с подтверждением' : ''
+  if (!item.isActive) return `${schedule}${mode} · отключена`
+  return `${schedule}${mode} · следующая ${formatFutureDay(item.nextOccurrence, today).toLowerCase()}`
 }

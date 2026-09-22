@@ -9,6 +9,7 @@ import { BudgetCard } from './BudgetCard'
 import { CategoryBudgets } from './CategoryBudgets'
 import styles from './DashboardPage.module.css'
 import { ForecastCard } from './ForecastCard'
+import { PendingCard } from './PendingCard'
 import { RecentTransactions } from './RecentTransactions'
 import { RecoveredAccountBanner } from './RecoveredAccountBanner'
 import { UpcomingCard } from './UpcomingCard'
@@ -29,6 +30,15 @@ export function DashboardPage() {
       {data ? (
         <>
           <BalanceSummary totalBalance={data.totalBalance} monthTotals={data.monthTotals} currency={data.currency} />
+          {data.pending.length > 0 && (
+            <PendingCard
+              items={data.pending}
+              categories={data.categories}
+              accounts={data.accounts}
+              currency={data.currency}
+              today={today}
+            />
+          )}
           {/* Карточка появляется, когда до конца месяца есть что ждать; без расписаний прогноз равен балансу */}
           {data.forecast && data.forecast.scheduledCount > 0 && (
             <ForecastCard

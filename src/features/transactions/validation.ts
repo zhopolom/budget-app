@@ -5,6 +5,7 @@ import type {
   Id,
   IsoDate,
   ManualTransactionType,
+  RecurringTransaction,
   TransferTransaction,
 } from '../../types/entities'
 import type { ValidationResult } from '../../types/validation'
@@ -118,6 +119,29 @@ export function draftFromTransaction(transaction: EntryTransaction | TransferTra
     type: transaction.type,
     categoryId: transaction.categoryId,
     accountId: transaction.accountId,
+    fromAccountId: null,
+    toAccountId: null,
+    ...common,
+  }
+}
+
+/** Черновик для подтверждения вхождения расписания: всё по правилу, дата — срок. */
+export function draftFromRecurringOccurrence(rule: RecurringTransaction, date: IsoDate): TransactionDraft {
+  const common = { amountText: Money.toInputString(rule.amount), date, note: rule.note }
+  if (rule.type === 'transfer') {
+    return {
+      type: 'transfer',
+      categoryId: null,
+      accountId: null,
+      fromAccountId: rule.fromAccountId,
+      toAccountId: rule.toAccountId,
+      ...common,
+    }
+  }
+  return {
+    type: rule.type,
+    categoryId: rule.categoryId,
+    accountId: rule.accountId,
     fromAccountId: null,
     toAccountId: null,
     ...common,

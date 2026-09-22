@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { ACCOUNT_TYPE_ICONS } from '../../features/accounts/labels'
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
 import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
@@ -31,6 +31,12 @@ interface TransactionFormProps {
   data: TransactionEditorData
   mode: 'create' | 'edit'
   autoFocusAmount?: boolean
+  /** Тип задан снаружи (подтверждение регулярной операции): переключатель не показываем. */
+  lockType?: boolean
+  /** Подпись кнопки сохранения вместо «Добавить / Сохранить». */
+  submitLabel?: string
+  /** Дополнительные поля между датой и кнопками. */
+  extra?: ReactNode
   onSubmit: (input: TransactionInput) => Promise<void>
   /** «Повторить»: открывает новую форму с теми же данными и сегодняшней датой. */
   onDuplicate?: () => void
@@ -47,6 +53,9 @@ export function TransactionForm({
   data,
   mode,
   autoFocusAmount = false,
+  lockType = false,
+  submitLabel,
+  extra,
   onSubmit,
   onDuplicate,
   onDelete,
@@ -116,7 +125,9 @@ export function TransactionForm({
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
-      <SegmentedControl options={TYPE_OPTIONS} value={draft.type} onChange={changeType} label="Тип операции" />
+      {!lockType && (
+        <SegmentedControl options={TYPE_OPTIONS} value={draft.type} onChange={changeType} label="Тип операции" />
+      )}
 
       <AmountInput
         value={draft.amountText}
@@ -195,6 +206,8 @@ export function TransactionForm({
         />
       </div>
 
+      {extra}
+
       {(onDuplicate || onDelete) && (
         <div className={styles.actions}>
           {onDuplicate && (
@@ -213,7 +226,7 @@ export function TransactionForm({
       <div className={styles.submitBar}>
         <div className={styles.submitInner}>
           <Button type="submit" block disabled={submitting}>
-            {submitLabelFor(mode, draft.type)}
+            {submitLabel ?? submitLabelFor(mode, draft.type)}
           </Button>
         </div>
       </div>

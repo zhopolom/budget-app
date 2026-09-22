@@ -6,6 +6,7 @@ import { AnalyticsPage } from '../pages/Analytics/AnalyticsPage'
 import { BudgetsPage } from '../pages/Budgets/BudgetsPage'
 import { CalendarPage } from '../pages/Calendar/CalendarPage'
 import { CategoriesPage } from '../pages/Categories/CategoriesPage'
+import { ConfirmOccurrencePage } from '../pages/Confirm/ConfirmOccurrencePage'
 import { DashboardPage } from '../pages/Dashboard/DashboardPage'
 import { EditTransactionPage } from '../pages/EditTransaction/EditTransactionPage'
 import { RecurringPage } from '../pages/Recurring/RecurringPage'
@@ -32,6 +33,7 @@ const TAB_ROUTES: Record<string, ComponentType> = {
 const FULLSCREEN_ROUTES: Record<string, ComponentType> = {
   '/add': AddTransactionPage,
   '/edit': EditTransactionPage,
+  '/confirm': ConfirmOccurrencePage,
 }
 
 function RedirectHome() {
