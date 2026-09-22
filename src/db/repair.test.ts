@@ -65,6 +65,7 @@ const ORPHAN_RULE: RecurringEntry = {
   startDate: '2026-08-14',
   nextOccurrence: '2026-09-14',
   isActive: true,
+  executionMode: 'automatic',
   createdAt: 3,
   updatedAt: 3,
 }
@@ -228,6 +229,11 @@ describe('повторный ремонт', () => {
       categories: 0,
       recurringCategories: 0,
       createdRecoveredAccount: false,
+      systemCategories: 0,
+      orphanOccurrences: 0,
+      goals: 0,
+      templateLimits: 0,
+      rules: 0,
     })
     expect(await upgraded.accounts.toArray()).toEqual(before.accounts)
     expect(await upgraded.transactions.toArray()).toEqual(before.transactions)
@@ -259,6 +265,50 @@ describe('повторный ремонт', () => {
     expect(summary.transactions).toBe(1)
     expect(await upgraded.accounts.where('id').equals(RECOVERED_ACCOUNT_ID).count()).toBe(1)
 
+    upgraded.close()
+  })
+})
+
+describe('ожидающие вхождения без расписания (0.4)', () => {
+  it('снимаются ремонтом, а вхождения живых расписаний остаются', async () => {
+    await writeV2Database({ recurring: [{ ...ORPHAN_RULE, id: 'rule-alive', accountId: CARD.id }] })
+    const upgraded = await openUpgraded()
+
+    await upgraded.pendingOccurrences.bulkAdd([
+      { id: 'p-alive', recurringId: 'rule-alive', scheduledDate: '2026-09-14', status: 'pending', createdAt: 1, updatedAt: 1 },
+      { id: 'p-orphan', recurringId: 'rule-gone', scheduledDate: '2026-09-14', status: 'pending', createdAt: 1, updatedAt: 1 },
+      { id: 'p-orphan-done', recurringId: 'rule-gone', scheduledDate: '2026-08-14', status: 'confirmed', createdAt: 1, updatedAt: 1 },
+    ])
+
+    const summary = await upgraded.transaction(
+      'rw',
+      [
+        upgraded.accounts,
+        upgraded.categories,
+        upgraded.transactions,
+        upgraded.recurringTransactions,
+        upgraded.pendingOccurrences,
+        upgraded.settings,
+      ],
+      (tx) => repairDanglingReferences(tx),
+    )
+
+    expect(summary.orphanOccurrences).toBe(2)
+    expect((await upgraded.pendingOccurrences.toArray()).map((item) => item.id)).toEqual(['p-alive'])
+    upgraded.close()
+  })
+
+  it('без таблицы вхождений в транзакции ремонт её не трогает', async () => {
+    await writeV2Database({ transactions: [ORPHAN] })
+    const upgraded = await openUpgraded()
+
+    const summary = await upgraded.transaction(
+      'rw',
+      [upgraded.accounts, upgraded.categories, upgraded.transactions, upgraded.recurringTransactions, upgraded.settings],
+      (tx) => repairDanglingReferences(tx),
+    )
+
+    expect(summary.orphanOccurrences).toBe(0)
     upgraded.close()
   })
 })

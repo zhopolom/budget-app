@@ -20,11 +20,13 @@ interface TransactionRowProps {
  */
 export function TransactionRow({ view, currency, dayLabel }: TransactionRowProps) {
   const id = view.transaction.id
+  // Корректировка — результат сверки, повторять её нечем
+  const repeatable = view.transaction.type !== 'adjustment'
 
   return (
     <SwipeActions
       left={{ label: 'Изменить', icon: '✏️', onAction: () => openEditor(id) }}
-      right={{ label: 'Повторить', icon: '🔁', onAction: () => openCopy(id) }}
+      right={repeatable ? { label: 'Повторить', icon: '🔁', onAction: () => openCopy(id) } : undefined}
     >
       <TransactionItem view={view} currency={currency} dayLabel={dayLabel} onSelect={openEditor} />
     </SwipeActions>

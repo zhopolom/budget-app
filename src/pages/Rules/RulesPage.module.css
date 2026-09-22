@@ -1,0 +1,30 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note,
+.hint {
+  padding: 0 4px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.hint {
+  font-size: 13px;
+}
+
+.card {
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.priority {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  color: var(--ink-2);
+}

@@ -1,7 +1,7 @@
 import type { IsoDate, MinorUnits } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { compareNewestFirst } from './calculations'
-import { isTransfer } from './model'
+import { isEntry, isTransfer } from './model'
 import type { TransactionView } from './views'
 
 export interface DayGroup {
@@ -29,7 +29,8 @@ export function groupByDay(views: readonly TransactionView[]): DayGroup[] {
     }
     current.items.push(view)
 
-    if (isTransfer(transaction)) continue
+    // Переводы и корректировки в итогах дня не участвуют
+    if (!isEntry(transaction)) continue
     if (transaction.type === 'expense') current.expense = Money.add(current.expense, transaction.amount)
     else current.income = Money.add(current.income, transaction.amount)
   }

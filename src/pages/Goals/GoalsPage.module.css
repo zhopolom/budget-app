@@ -1,0 +1,148 @@
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.note {
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+
+.note strong {
+  font-family: var(--font-num);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.card {
+  padding: 8px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+}
+
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sectionTitle {
+  padding: 0 4px;
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ink-2);
+}
+
+.goal {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 0;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  transition: background-color 0.15s;
+}
+
+.goal:active {
+  background: var(--surface-2);
+}
+
+.goal[data-archived] {
+  opacity: 0.7;
+}
+
+.head {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.icon {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.name {
+  font-size: 16px;
+  font-weight: 650;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.percent {
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-2);
+}
+
+.percent[data-status='reached'] {
+  color: var(--positive);
+}
+
+.percent[data-status='overdue'] {
+  color: var(--warning);
+}
+
+.amounts {
+  font-family: var(--font-num);
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+
+.target {
+  color: var(--ink-2);
+  font-size: 17px;
+  font-weight: 600;
+}
+
+.footer {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.footer[data-status='reached'] {
+  color: var(--positive);
+  font-weight: 600;
+}
+
+.footer[data-status='overdue'] {
+  color: var(--warning);
+  font-weight: 500;
+}
+
+.meta {
+  font-size: 13px;
+  color: var(--ink-2);
+}

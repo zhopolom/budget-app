@@ -69,6 +69,12 @@
   white-space: nowrap;
 }
 
+.carry {
+  margin-top: -2px;
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
 .percent {
   font-family: var(--font-num);
   font-size: 15px;

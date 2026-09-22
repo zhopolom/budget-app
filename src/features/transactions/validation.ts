@@ -1,4 +1,13 @@
-import type { Account, Category, Id, IsoDate, Transaction, TransactionType } from '../../types/entities'
+import type {
+  Account,
+  Category,
+  EntryTransaction,
+  Id,
+  IsoDate,
+  ManualTransactionType,
+  RecurringTransaction,
+  TransferTransaction,
+} from '../../types/entities'
 import type { ValidationResult } from '../../types/validation'
 import { isValidIsoDate } from '../../utils/dates'
 import { Money, PARSE_ERROR_MESSAGES } from '../../utils/money'
@@ -14,7 +23,7 @@ export type { TransactionInput }
  * не стирало уже введённое.
  */
 export interface TransactionDraft {
-  type: TransactionType
+  type: ManualTransactionType
   amountText: string
   categoryId: Id | null
   accountId: Id | null
@@ -87,7 +96,8 @@ export function validateTransactionDraft(
   return { ok: true, value: { type: draft.type, categoryId: category.id, accountId: account.id, ...common } }
 }
 
-export function draftFromTransaction(transaction: Transaction): TransactionDraft {
+/** Корректировку форма не открывает: у неё свой экран, поэтому тип сужен до ручных операций. */
+export function draftFromTransaction(transaction: EntryTransaction | TransferTransaction): TransactionDraft {
   const common = {
     amountText: Money.toInputString(transaction.amount),
     date: transaction.date,
@@ -109,6 +119,29 @@ export function draftFromTransaction(transaction: Transaction): TransactionDraft
     type: transaction.type,
     categoryId: transaction.categoryId,
     accountId: transaction.accountId,
+    fromAccountId: null,
+    toAccountId: null,
+    ...common,
+  }
+}
+
+/** Черновик для подтверждения вхождения расписания: всё по правилу, дата — срок. */
+export function draftFromRecurringOccurrence(rule: RecurringTransaction, date: IsoDate): TransactionDraft {
+  const common = { amountText: Money.toInputString(rule.amount), date, note: rule.note }
+  if (rule.type === 'transfer') {
+    return {
+      type: 'transfer',
+      categoryId: null,
+      accountId: null,
+      fromAccountId: rule.fromAccountId,
+      toAccountId: rule.toAccountId,
+      ...common,
+    }
+  }
+  return {
+    type: rule.type,
+    categoryId: rule.categoryId,
+    accountId: rule.accountId,
     fromAccountId: null,
     toAccountId: null,
     ...common,

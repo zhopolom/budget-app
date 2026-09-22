@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent } from 'react'
+import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { ACCOUNT_TYPE_ICONS } from '../../features/accounts/labels'
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
 import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
@@ -9,7 +9,7 @@ import {
   validateTransactionDraft,
   type TransactionDraft,
 } from '../../features/transactions/validation'
-import type { Id, TransactionType } from '../../types/entities'
+import type { Id, ManualTransactionType } from '../../types/entities'
 import { toIsoDate } from '../../utils/dates'
 import { AmountInput } from '../AmountInput/AmountInput'
 import { Button } from '../Button/Button'
@@ -24,20 +24,26 @@ const TYPE_OPTIONS = [
   { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
   { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
-] as const satisfies readonly { value: TransactionType; label: string }[]
+] as const satisfies readonly { value: ManualTransactionType; label: string }[]
 
 interface TransactionFormProps {
   initial: TransactionDraft
   data: TransactionEditorData
   mode: 'create' | 'edit'
   autoFocusAmount?: boolean
+  /** Тип задан снаружи (подтверждение регулярной операции): переключатель не показываем. */
+  lockType?: boolean
+  /** Подпись кнопки сохранения вместо «Добавить / Сохранить». */
+  submitLabel?: string
+  /** Дополнительные поля между датой и кнопками. */
+  extra?: ReactNode
   onSubmit: (input: TransactionInput) => Promise<void>
   /** «Повторить»: открывает новую форму с теми же данными и сегодняшней датой. */
   onDuplicate?: () => void
   onDelete?: () => void
 }
 
-function submitLabelFor(mode: 'create' | 'edit', type: TransactionType): string {
+function submitLabelFor(mode: 'create' | 'edit', type: ManualTransactionType): string {
   if (mode === 'edit') return 'Сохранить'
   return type === 'transfer' ? 'Перевести' : 'Добавить'
 }
@@ -47,6 +53,9 @@ export function TransactionForm({
   data,
   mode,
   autoFocusAmount = false,
+  lockType = false,
+  submitLabel,
+  extra,
   onSubmit,
   onDuplicate,
   onDelete,
@@ -78,7 +87,7 @@ export function TransactionForm({
 
   const update = (patch: Partial<TransactionDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
-  const changeType = (type: TransactionType) => {
+  const changeType = (type: ManualTransactionType) => {
     if (type === 'transfer') {
       // Счёт, который пользователь уже выбрал, становится счётом-источником
       update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })
@@ -116,7 +125,9 @@ export function TransactionForm({
 
   return (
     <form className={styles.form} onSubmit={handleSubmit} noValidate>
-      <SegmentedControl options={TYPE_OPTIONS} value={draft.type} onChange={changeType} label="Тип операции" />
+      {!lockType && (
+        <SegmentedControl options={TYPE_OPTIONS} value={draft.type} onChange={changeType} label="Тип операции" />
+      )}
 
       <AmountInput
         value={draft.amountText}
@@ -195,6 +206,8 @@ export function TransactionForm({
         />
       </div>
 
+      {extra}
+
       {(onDuplicate || onDelete) && (
         <div className={styles.actions}>
           {onDuplicate && (
@@ -213,7 +226,7 @@ export function TransactionForm({
       <div className={styles.submitBar}>
         <div className={styles.submitInner}>
           <Button type="submit" block disabled={submitting}>
-            {submitLabelFor(mode, draft.type)}
+            {submitLabel ?? submitLabelFor(mode, draft.type)}
           </Button>
         </div>
       </div>

@@ -4,6 +4,7 @@ import { resetTestDatabase } from '../../test/db'
 import { Money } from '../../utils/money'
 import { SYSTEM_CATEGORY_IDS as C } from '../categories/defaults'
 import { budgetsRepository, categoryBudgetsRepository } from './repository'
+import { templatesRepository } from './templatesRepository'
 
 const SEPTEMBER = { year: 2026, month: 9 }
 const OCTOBER = { year: 2026, month: 10 }
@@ -75,33 +76,26 @@ describe('categoryBudgetsRepository', () => {
     expect(await categoryBudgetsRepository.listAll()).toHaveLength(1)
   })
 
-  describe('copyFrom', () => {
-    it('переносит лимиты прошлого месяца', async () => {
+  describe('copyMonth (через templatesRepository)', () => {
+    it('в режиме merge копирует только недостающие лимиты и не трогает заданные', async () => {
       await categoryBudgetsRepository.set(SEPTEMBER, C.groceries, Money.fromMajor(5_000))
       await categoryBudgetsRepository.set(SEPTEMBER, C.transport, Money.fromMajor(2_000))
+      await categoryBudgetsRepository.set(OCTOBER, C.groceries, Money.fromMajor(6_000))
 
-      expect(await categoryBudgetsRepository.copyFrom(SEPTEMBER, OCTOBER)).toBe(2)
+      const plan = await templatesRepository.copyMonth(SEPTEMBER, OCTOBER, 'merge')
 
+      expect(plan.added.map((limit) => limit.categoryId)).toEqual([C.transport])
+      expect(plan.kept).toEqual([C.groceries])
       const october = await categoryBudgetsRepository.listForMonth(OCTOBER)
-      expect(october.map((item) => [item.categoryId, item.limitAmount]).sort()).toEqual(
-        [
-          [C.groceries, Money.fromMajor(5_000)],
-          [C.transport, Money.fromMajor(2_000)],
-        ].sort(),
-      )
+      expect(october.find((item) => item.categoryId === C.groceries)?.limitAmount).toBe(Money.fromMajor(6_000))
+      expect(october.find((item) => item.categoryId === C.transport)?.limitAmount).toBe(Money.fromMajor(2_000))
     })
 
-    it('не затирает уже заданные лимиты и повторный вызов ничего не меняет', async () => {
+    it('повторный вызов ничего не задваивает', async () => {
       await categoryBudgetsRepository.set(SEPTEMBER, C.groceries, Money.fromMajor(5_000))
-      await categoryBudgetsRepository.set(OCTOBER, C.groceries, Money.fromMajor(9_000))
-
-      expect(await categoryBudgetsRepository.copyFrom(SEPTEMBER, OCTOBER)).toBe(0)
-      expect((await categoryBudgetsRepository.listForMonth(OCTOBER))[0].limitAmount).toBe(Money.fromMajor(9_000))
-
-      await categoryBudgetsRepository.set(SEPTEMBER, C.transport, Money.fromMajor(2_000))
-      expect(await categoryBudgetsRepository.copyFrom(SEPTEMBER, OCTOBER)).toBe(1)
-      expect(await categoryBudgetsRepository.copyFrom(SEPTEMBER, OCTOBER)).toBe(0)
-      expect(await categoryBudgetsRepository.listForMonth(OCTOBER)).toHaveLength(2)
+      expect((await templatesRepository.copyMonth(SEPTEMBER, OCTOBER, 'merge')).added).toHaveLength(1)
+      expect((await templatesRepository.copyMonth(SEPTEMBER, OCTOBER, 'merge')).added).toHaveLength(0)
+      expect(await categoryBudgetsRepository.listForMonth(OCTOBER)).toHaveLength(1)
     })
   })
 })

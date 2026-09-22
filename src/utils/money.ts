@@ -148,8 +148,26 @@ function percentOf(part: MinorUnits, total: MinorUnits): number {
   return Math.round((part * 100) / total)
 }
 
-function isValidAmount(value: unknown): value is MinorUnits {
-  return typeof value === 'number' && Number.isSafeInteger(value) && value > 0 && value <= MAX_AMOUNT
+/*
+ * Единая политика проверки денежных значений. Всё, что попадает в базу —
+ * суммы операций, начальные остатки, лимиты бюджетов, суммы расписаний, —
+ * проходит через эти три предиката, и только через них. Своих проверок
+ * «на месте» быть не должно: две проверки рано или поздно разойдутся.
+ */
+
+/** Целое число копеек в пределах ±MAX_AMOUNT: то, что вообще можно хранить. NaN и ±Infinity не проходят. */
+export function isMoneyAmount(value: unknown): value is MinorUnits {
+  return typeof value === 'number' && Number.isSafeInteger(value) && Math.abs(value) <= MAX_AMOUNT
+}
+
+/** Ноль или больше: начальный остаток счёта. */
+export function isNonNegativeMoneyAmount(value: unknown): value is MinorUnits {
+  return isMoneyAmount(value) && value >= 0
+}
+
+/** Строго больше нуля: сумма операции, лимит бюджета. */
+export function isPositiveMoneyAmount(value: unknown): value is MinorUnits {
+  return isMoneyAmount(value) && value > 0
 }
 
 function currencySymbol(currency: CurrencyCode): string {
@@ -167,6 +185,8 @@ export const Money = {
   subtract,
   sum,
   percentOf,
-  isValidAmount,
+  isMoneyAmount,
+  isNonNegativeMoneyAmount,
+  isPositiveMoneyAmount,
   currencySymbol,
 } as const

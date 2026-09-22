@@ -16,3 +16,38 @@
   gap: 8px;
   margin-top: 4px;
 }
+
+.option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.checkbox {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  margin: 1px 0 0;
+  accent-color: var(--accent);
+}
+
+.optionText {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.optionTitle {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.optionHint {
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}

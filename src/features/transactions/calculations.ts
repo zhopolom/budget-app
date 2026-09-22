@@ -1,10 +1,14 @@
 import type { Account, Category, Id, MinorUnits, Transaction } from '../../types/entities'
 import { Money } from '../../utils/money'
-import { isEntry, isTransfer } from './model'
+import { adjustmentDelta, isAdjustment, isEntry, isTransfer } from './model'
 
-/** Расход — отрицательный, доход — положительный. У перевода знака нет. */
+/**
+ * Вклад операции в общий капитал: расход — минус, доход — плюс,
+ * корректировка — по направлению. У перевода знака нет: деньги переложены.
+ */
 export function signedAmount(transaction: Transaction): MinorUnits {
   if (isTransfer(transaction)) return 0
+  if (isAdjustment(transaction)) return adjustmentDelta(transaction)
   return transaction.type === 'expense' ? -transaction.amount : transaction.amount
 }
 
@@ -16,14 +20,15 @@ export interface Totals {
 }
 
 /**
- * Доходы и расходы периода. Переводы сюда не попадают:
- * деньги не пришли и не ушли, они переложены между своими счетами.
+ * Доходы и расходы периода. Переводы сюда не попадают: деньги не пришли и не
+ * ушли, они переложены между своими счетами. Корректировки — тоже: сверка
+ * не доход и не расход, а признание того, что учёт разошёлся с банком.
  */
 export function calculateTotals(transactions: readonly Transaction[]): Totals {
   let income = 0
   let expense = 0
   for (const transaction of transactions) {
-    if (isTransfer(transaction)) continue
+    if (!isEntry(transaction)) continue
     if (transaction.type === 'income') income = Money.add(income, transaction.amount)
     else expense = Money.add(expense, transaction.amount)
   }
@@ -31,15 +36,16 @@ export function calculateTotals(transactions: readonly Transaction[]): Totals {
 }
 
 /**
- * Общий баланс: начальные остатки всех счетов + все доходы − все расходы.
- * Переводы общий капитал не меняют, поэтому в сумму не входят.
+ * Общий баланс: начальные остатки всех счетов + все доходы − все расходы
+ * ± корректировки. Переводы общий капитал не меняют, поэтому в сумму не входят.
  */
 export function calculateTotalBalance(
   accounts: readonly Pick<Account, 'initialBalance'>[],
   transactions: readonly Transaction[],
 ): MinorUnits {
-  const initial = Money.sum(accounts.map((account) => account.initialBalance))
-  return Money.add(initial, calculateTotals(transactions).net)
+  let total = Money.sum(accounts.map((account) => account.initialBalance))
+  for (const transaction of transactions) total = Money.add(total, signedAmount(transaction))
+  return total
 }
 
 /** Новые сверху: по дате, внутри одного дня — по времени создания. */
@@ -85,6 +91,8 @@ export interface AccountActivity {
   expense: MinorUnits
   transferIn: MinorUnits
   transferOut: MinorUnits
+  /** Сумма корректировок со знаком: сверки могли и добавить, и убавить. */
+  adjustment: MinorUnits
   count: number
 }
 
@@ -92,7 +100,7 @@ export function calculateAccountActivity(
   accountId: Id,
   transactions: readonly Transaction[],
 ): AccountActivity {
-  const activity: AccountActivity = { income: 0, expense: 0, transferIn: 0, transferOut: 0, count: 0 }
+  const activity: AccountActivity = { income: 0, expense: 0, transferIn: 0, transferOut: 0, adjustment: 0, count: 0 }
 
   for (const transaction of transactions) {
     if (isTransfer(transaction)) {
@@ -109,7 +117,8 @@ export function calculateAccountActivity(
     }
     if (transaction.accountId !== accountId) continue
     activity.count += 1
-    if (transaction.type === 'income') activity.income = Money.add(activity.income, transaction.amount)
+    if (isAdjustment(transaction)) activity.adjustment = Money.add(activity.adjustment, adjustmentDelta(transaction))
+    else if (transaction.type === 'income') activity.income = Money.add(activity.income, transaction.amount)
     else activity.expense = Money.add(activity.expense, transaction.amount)
   }
 

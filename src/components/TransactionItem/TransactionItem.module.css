@@ -73,8 +73,9 @@
   color: var(--positive);
 }
 
-/* Перевод не меняет капитал — показываем его приглушённо */
-.amount[data-type='transfer'] {
+/* Перевод не меняет капитал, корректировка — не трата и не доход: обе приглушённо */
+.amount[data-type='transfer'],
+.amount[data-type='adjustment'] {
   color: var(--ink-2);
 }
 

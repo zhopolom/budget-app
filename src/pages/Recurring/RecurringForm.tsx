@@ -17,7 +17,7 @@ import {
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
 import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
 import type { TransactionEditorData } from '../../features/transactions/useTransactionEditorData'
-import type { Id, RecurrenceFrequency, TransactionType } from '../../types/entities'
+import type { Id, ManualTransactionType, RecurrenceFrequency, RecurringExecutionMode } from '../../types/entities'
 import { Money } from '../../utils/money'
 import styles from './RecurringForm.module.css'
 
@@ -25,7 +25,7 @@ const TYPE_OPTIONS = [
   { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
   { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
-] as const satisfies readonly { value: TransactionType; label: string }[]
+] as const satisfies readonly { value: ManualTransactionType; label: string }[]
 
 const FREQUENCY_CHIPS = [
   { value: 'daily', label: 'День' },
@@ -33,6 +33,16 @@ const FREQUENCY_CHIPS = [
   { value: 'monthly', label: 'Месяц' },
   { value: 'yearly', label: 'Год' },
 ] as const satisfies readonly { value: RecurrenceFrequency; label: string }[]
+
+const EXECUTION_OPTIONS = [
+  { value: 'automatic', label: 'Записывать' },
+  { value: 'confirm', label: 'Спрашивать' },
+] as const satisfies readonly { value: RecurringExecutionMode; label: string }[]
+
+const EXECUTION_HINTS: Record<RecurringExecutionMode, string> = {
+  automatic: 'В день срока операция появится в истории сама.',
+  confirm: 'В день срока появится на главной в «Ожидают подтверждения»: там её можно подтвердить, изменить или пропустить.',
+}
 
 interface RecurringFormProps {
   initial: RecurringDraft
@@ -68,7 +78,7 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
   const errors = attempted && !result.ok ? result.errors : {}
   const update = (patch: Partial<RecurringDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
-  const changeType = (type: TransactionType) => {
+  const changeType = (type: ManualTransactionType) => {
     if (type === 'transfer') {
       // Счёт, который уже выбран, становится счётом-источником
       update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })
@@ -189,6 +199,17 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
           />
           <p className={styles.hint}>{scheduleHint ?? `Число от 1 до ${MAX_INTERVAL}`}</p>
         </div>
+      </section>
+
+      <section className={styles.section}>
+        <h3 className={styles.sectionTitle}>В день срока</h3>
+        <SegmentedControl
+          options={EXECUTION_OPTIONS}
+          value={draft.executionMode}
+          onChange={(executionMode) => update({ executionMode })}
+          label="Как создавать операцию"
+        />
+        <p className={styles.note}>{EXECUTION_HINTS[draft.executionMode]}</p>
       </section>
 
       <div className={styles.fields}>

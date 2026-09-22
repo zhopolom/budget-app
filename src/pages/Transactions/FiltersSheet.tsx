@@ -17,7 +17,7 @@ import type { Account, Category, CurrencyCode, TransactionType } from '../../typ
 import { Money } from '../../utils/money'
 import styles from './FiltersSheet.module.css'
 
-const TYPE_CHIPS = (['expense', 'income', 'transfer'] as const).map((type) => ({
+const TYPE_CHIPS = (['expense', 'income', 'transfer', 'adjustment'] as const).map((type) => ({
   value: type,
   label: TRANSACTION_TYPE_LABELS[type],
 })) satisfies readonly { value: TransactionType; label: string }[]

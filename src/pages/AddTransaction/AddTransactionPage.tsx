@@ -9,11 +9,11 @@ import { transactionsRepository } from '../../features/transactions/repository'
 import { pickDefaultAccountId, useTransactionEditorData } from '../../features/transactions/useTransactionEditorData'
 import { draftFromTransaction, emptyDraft, type TransactionDraft } from '../../features/transactions/validation'
 import { useToday } from '../../hooks/useToday'
-import type { TransactionType } from '../../types/entities'
+import type { ManualTransactionType } from '../../types/entities'
 
-const TYPES: readonly TransactionType[] = ['expense', 'income', 'transfer']
+const TYPES: readonly ManualTransactionType[] = ['expense', 'income', 'transfer']
 
-function isTransactionType(value: string | null): value is TransactionType {
+function isTransactionType(value: string | null): value is ManualTransactionType {
   return value !== null && (TYPES as readonly string[]).includes(value)
 }
 
@@ -32,8 +32,9 @@ export function AddTransactionPage() {
 
   const buildInitial = (): TransactionDraft => {
     if (!data) return emptyDraft(null, today)
-    // Повтор операции: всё то же самое, но сегодняшней датой
-    if (source) return { ...draftFromTransaction(source), date: today }
+    // Повтор операции: всё то же самое, но сегодняшней датой. Корректировку не повторяют —
+    // она результат сверки, а не трата
+    if (source && source.type !== 'adjustment') return { ...draftFromTransaction(source), date: today }
 
     const base = emptyDraft(pickDefaultAccountId(data.accounts, data.settings.lastAccountId), today)
     return isTransactionType(requestedType) ? { ...base, type: requestedType } : base

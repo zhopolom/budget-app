@@ -3,25 +3,69 @@ import { repairDanglingReferences, type RepairSummary } from '../../db/repair'
 import { SETTINGS_ID } from '../settings/defaults'
 import { settingsRepository } from '../settings/repository'
 import { BACKUP_APP, BACKUP_SCHEMA_VERSION, type BackupData, type BackupFile } from './format'
+import { validateBackup } from './validate'
 
 /** Все таблицы разом: копия должна быть согласованным снимком, а не склейкой чтений. */
 export async function createBackup(exportDate: Date, appVersion: string): Promise<BackupFile> {
   const data = await db.transaction(
     'r',
-    [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],
+    [
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.categoryBudgets,
+      db.recurringTransactions,
+      db.pendingOccurrences,
+      db.savingsGoals,
+      db.budgetTemplates,
+      db.importHistory,
+      db.categoryRules,
+      db.settings,
+    ],
     async (): Promise<BackupData> => {
-      const [accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, settings] =
-        await Promise.all([
-          db.accounts.toArray(),
-          db.categories.toArray(),
-          db.transactions.toArray(),
-          db.budgets.toArray(),
-          db.categoryBudgets.toArray(),
-          db.recurringTransactions.toArray(),
-          settingsRepository.get(),
-        ])
+      const [
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        categoryBudgets,
+        recurringTransactions,
+        pendingOccurrences,
+        savingsGoals,
+        budgetTemplates,
+        importHistory,
+        categoryRules,
+        settings,
+      ] = await Promise.all([
+        db.accounts.toArray(),
+        db.categories.toArray(),
+        db.transactions.toArray(),
+        db.budgets.toArray(),
+        db.categoryBudgets.toArray(),
+        db.recurringTransactions.toArray(),
+        db.pendingOccurrences.toArray(),
+        db.savingsGoals.toArray(),
+        db.budgetTemplates.toArray(),
+        db.importHistory.toArray(),
+        db.categoryRules.toArray(),
+        settingsRepository.get(),
+      ])
 
-      return { accounts, categories, transactions, budgets, categoryBudgets, recurringTransactions, settings }
+      return {
+        accounts,
+        categories,
+        transactions,
+        budgets,
+        categoryBudgets,
+        recurringTransactions,
+        pendingOccurrences,
+        savingsGoals,
+        budgetTemplates,
+        importHistory,
+        categoryRules,
+        settings,
+      }
     },
   )
 
@@ -42,13 +86,32 @@ export function serializeBackup(backup: BackupFile): string {
  * Восстановление заменяет данные целиком, а не дописывает к текущим:
  * слияние двух историй операций дало бы дубли, которые потом не развести.
  *
- * Всё в одной транзакции Dexie — оборванное восстановление не оставит
- * половину старых данных вперемешку с половиной новых.
+ * Данные приходят уже разобранными и нормализованными (parseBackup), но
+ * уникальность проверяется ещё раз до открытия транзакции: это последняя
+ * линия обороны, и она стоит дёшево. Дальше всё в одной транзакции Dexie —
+ * оборванное восстановление не оставит половину старых данных вперемешку
+ * с половиной новых, а упавшее не тронет их вовсе.
  */
 export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
+  const check = validateBackup(data)
+  if (!check.ok) throw new Error(check.error)
+
   return db.transaction(
     'rw',
-    [db.accounts, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.recurringTransactions, db.settings],
+    [
+      db.accounts,
+      db.categories,
+      db.transactions,
+      db.budgets,
+      db.categoryBudgets,
+      db.recurringTransactions,
+      db.pendingOccurrences,
+      db.savingsGoals,
+      db.budgetTemplates,
+      db.importHistory,
+      db.categoryRules,
+      db.settings,
+    ],
     async (transaction) => {
       await Promise.all([
         db.accounts.clear(),
@@ -57,6 +120,11 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.budgets.clear(),
         db.categoryBudgets.clear(),
         db.recurringTransactions.clear(),
+        db.pendingOccurrences.clear(),
+        db.savingsGoals.clear(),
+        db.budgetTemplates.clear(),
+        db.importHistory.clear(),
+        db.categoryRules.clear(),
       ])
 
       await Promise.all([
@@ -66,6 +134,11 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.budgets.bulkAdd(data.budgets),
         db.categoryBudgets.bulkAdd(data.categoryBudgets),
         db.recurringTransactions.bulkAdd(data.recurringTransactions),
+        db.pendingOccurrences.bulkAdd(data.pendingOccurrences),
+        db.savingsGoals.bulkAdd(data.savingsGoals),
+        db.budgetTemplates.bulkAdd(data.budgetTemplates),
+        db.importHistory.bulkAdd(data.importHistory),
+        db.categoryRules.bulkAdd(data.categoryRules),
         db.settings.put({ ...data.settings, id: SETTINGS_ID }),
       ])
 

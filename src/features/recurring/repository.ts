@@ -1,12 +1,23 @@
 import Dexie from 'dexie'
 import { db } from '../../db/database'
-import type { Id, IsoDate, RecurringEntry, RecurringTransaction, RecurringTransfer, Transaction } from '../../types/entities'
+import type {
+  Id,
+  IsoDate,
+  PendingOccurrence,
+  RecurringEntry,
+  RecurringExecutionMode,
+  RecurringTransaction,
+  RecurringTransfer,
+  Transaction,
+} from '../../types/entities'
 import { addDaysIso } from '../../utils/dates'
 import { createId } from '../../utils/id'
+import { isPositiveMoneyAmount } from '../../utils/money'
 import { isSelfTransferRule } from './model'
 import {
   MAX_BACKFILL_OCCURRENCES,
   MAX_OCCURRENCES_PER_RUN,
+  MAX_RECURRING_INTERVAL,
   nextOccurrenceOnOrAfter,
   occurrencesBetween,
   resumeOccurrence,
@@ -20,8 +31,14 @@ import {
  * isActive сюда не входит намеренно: у флага активности единственный владелец —
  * setActive. Форма правки держит черновик, снятый при открытии шторки, и если бы
  * она писала isActive, то затирала бы кнопку «Отключить», нажатую минутой раньше.
+ *
+ * executionMode необязателен: без него правило автоматическое — так вели себя
+ * все расписания до 0.4, и так же читаются старые копии.
  */
-type Draft<T> = Omit<T, 'id' | 'nextOccurrence' | 'lastGeneratedAt' | 'isActive' | 'createdAt' | 'updatedAt'>
+type Draft<T> = Omit<
+  T,
+  'id' | 'nextOccurrence' | 'lastGeneratedAt' | 'isActive' | 'executionMode' | 'createdAt' | 'updatedAt'
+> & { executionMode?: RecurringExecutionMode }
 export type RecurringEntryInput = Draft<RecurringEntry>
 export type RecurringTransferInput = Draft<RecurringTransfer>
 export type RecurringInput = RecurringEntryInput | RecurringTransferInput
@@ -34,11 +51,18 @@ export interface ResumeInfo {
   dueToday: boolean
   /** Расписание закончилось: возобновлять нечего, досоздать — можно. */
   finished: boolean
+  /**
+   * Пропущенного больше, чем считаем за раз: missed — это потолок одного
+   * досоздания, а не точное число. Остаток досоздастся при следующих запусках.
+   */
+  truncated: boolean
 }
 
 export interface GenerationResult {
   /** Сколько операций создано. */
   created: number
+  /** Сколько вхождений ждут подтверждения (режим confirm). */
+  pending: number
   /** Сколько расписаний сработало. */
   rules: number
   /** Расписания, которые закончились и были отключены. */
@@ -57,6 +81,20 @@ async function generatedDatesOf(recurringId: Id): Promise<Set<IsoDate>> {
 }
 
 /**
+ * Даты, которые расписание уже разобрало: созданные операции плюс вхождения,
+ * которые ждут подтверждения, подтверждены или пропущены. Пропущенное — тоже
+ * решение: переключение правила в automatic не должно воскрешать его операцией.
+ */
+async function handledDatesOf(recurringId: Id): Promise<Set<IsoDate>> {
+  const [generated, occurrences] = await Promise.all([
+    generatedDatesOf(recurringId),
+    db.pendingOccurrences.where('recurringId').equals(recurringId).toArray(),
+  ])
+  for (const occurrence of occurrences) generated.add(occurrence.scheduledDate)
+  return generated
+}
+
+/**
  * Создаёт недостающие операции одного расписания и двигает nextOccurrence.
  * Вызывается и при обычном запуске, и при явном досоздании за паузу — разница
  * только в потолке: у запуска он держит открытие приложения быстрым.
@@ -67,13 +105,28 @@ async function generateForRule(
   rule: RecurringTransaction,
   today: IsoDate,
   limit: number,
-): Promise<{ created: number; finished: boolean }> {
+): Promise<{ created: number; pending: number; finished: boolean }> {
   const dates = occurrencesBetween(rule, rule.nextOccurrence, today, limit)
-  const already = await generatedDatesOf(rule.id)
+  const already = await handledDatesOf(rule.id)
   const fresh = dates.filter((date) => !already.has(date))
 
   const now = Date.now()
-  if (fresh.length > 0) {
+  const confirm = rule.executionMode === 'confirm'
+  if (fresh.length > 0 && confirm) {
+    // Режим подтверждения: настоящей операции ещё нет — только вхождение, которое ждёт решения
+    await db.pendingOccurrences.bulkAdd(
+      fresh.map(
+        (date): PendingOccurrence => ({
+          id: createId(),
+          recurringId: rule.id,
+          scheduledDate: date,
+          status: 'pending',
+          createdAt: now,
+          updatedAt: now,
+        }),
+      ),
+    )
+  } else if (fresh.length > 0) {
     await db.transactions.bulkAdd(fresh.map((date) => transactionFromRule(rule, date, now)))
   }
 
@@ -88,11 +141,11 @@ async function generateForRule(
     updatedAt: now,
   })
 
-  return { created: fresh.length, finished: next === null }
+  return { created: confirm ? 0 : fresh.length, pending: confirm ? fresh.length : 0, finished: next === null }
 }
 
 /** Операция, созданная расписанием. Перевод получает оба счёта, расход — категорию. */
-function transactionFromRule(rule: RecurringTransaction, date: IsoDate, now: number): Transaction {
+export function transactionFromRule(rule: RecurringTransaction, date: IsoDate, now: number): Transaction {
   const base = {
     id: createId(),
     amount: rule.amount,
@@ -110,6 +163,14 @@ function transactionFromRule(rule: RecurringTransaction, date: IsoDate, now: num
   return { ...base, type: rule.type, accountId: rule.accountId, categoryId: rule.categoryId }
 }
 
+/** Последняя проверка перед записью: сумма и шаг повтора в тех же границах, что у формы и парсера копий. */
+function assertRecurringInput(input: RecurringInput): void {
+  if (!isPositiveMoneyAmount(input.amount)) throw new RangeError('Сумма регулярной операции вне допустимых пределов')
+  if (!Number.isInteger(input.interval) || input.interval < 1 || input.interval > MAX_RECURRING_INTERVAL) {
+    throw new RangeError(`Шаг повтора должен быть от 1 до ${MAX_RECURRING_INTERVAL}`)
+  }
+}
+
 export const recurringRepository = {
   /** Ближайшие по сроку — первыми. */
   listAll(): Promise<RecurringTransaction[]> {
@@ -121,12 +182,14 @@ export const recurringRepository = {
   },
 
   async create(input: RecurringInput, today: IsoDate): Promise<RecurringTransaction> {
+    assertRecurringInput(input)
     const now = Date.now()
     // Первое вхождение — не раньше начала расписания и не раньше сегодняшнего дня,
     // иначе создание правила задним числом сразу нарисовало бы гору операций
     const first = nextOccurrenceOnOrAfter(input, input.startDate > today ? input.startDate : today)
     const recurring: RecurringTransaction = {
       ...input,
+      executionMode: input.executionMode ?? 'automatic',
       id: createId(),
       nextOccurrence: first ?? input.startDate,
       // Новое правило активно, если ему вообще есть когда сработать
@@ -147,6 +210,7 @@ export const recurringRepository = {
    * его могла поменять кнопка «Отключить» — форма об этом не знает.
    */
   async update(id: Id, input: RecurringInput, today: IsoDate): Promise<void> {
+    assertRecurringInput(input)
     await db.transaction('rw', db.recurringTransactions, async () => {
       const existing = await db.recurringTransactions.get(id)
       if (!existing) throw new Error('Регулярная операция не найдена')
@@ -156,6 +220,7 @@ export const recurringRepository = {
 
       await db.recurringTransactions.put({
         ...input,
+        executionMode: input.executionMode ?? 'automatic',
         id,
         nextOccurrence: next ?? existing.nextOccurrence,
         isActive: next !== null && existing.isActive,
@@ -188,7 +253,7 @@ export const recurringRepository = {
     today: IsoDate,
     options: { backfill?: boolean } = {},
   ): Promise<number> {
-    return db.transaction('rw', db.recurringTransactions, db.transactions, async () => {
+    return db.transaction('rw', db.recurringTransactions, db.transactions, db.pendingOccurrences, async () => {
       const rule = await db.recurringTransactions.get(id)
       if (!rule) throw new Error('Регулярная операция не найдена')
 
@@ -210,7 +275,9 @@ export const recurringRepository = {
         await db.recurringTransactions.update(id, { isActive: true, updatedAt: now })
         const refreshed = await db.recurringTransactions.get(id)
         if (!refreshed) return 0
-        return (await generateForRule(refreshed, today, MAX_BACKFILL_OCCURRENCES)).created
+        const result = await generateForRule(refreshed, today, MAX_BACKFILL_OCCURRENCES)
+        // В режиме подтверждения досозданное — это вхождения, которые ждут решения на главной
+        return result.created + result.pending
       }
 
       const next = resumeOccurrence(rule, today)
@@ -234,27 +301,37 @@ export const recurringRepository = {
    */
   async resumeInfo(id: Id, today: IsoDate): Promise<ResumeInfo> {
     const rule = await db.recurringTransactions.get(id)
-    if (!rule) return { missed: 0, dueToday: false, finished: false }
+    if (!rule) return { missed: 0, dueToday: false, finished: false, truncated: false }
 
     const resume = resumeOccurrence(rule, today)
     // Расписание закончилось — пропущено всё несозданное до конца расписания
     const until = resume ?? today
 
-    const dates = occurrencesBetween(rule, rule.nextOccurrence, until, MAX_BACKFILL_OCCURRENCES)
-    const already = await generatedDatesOf(id)
+    // Берём на одно вхождение больше потолка: так видно, что за потолком что-то есть
+    const dates = occurrencesBetween(rule, rule.nextOccurrence, until, MAX_BACKFILL_OCCURRENCES + 1)
+    const already = await handledDatesOf(id)
     const fresh = dates.filter((date) => !already.has(date))
+    const missedAll = resume === null ? fresh : fresh.filter((date) => date < resume)
 
     return {
-      missed: resume === null ? fresh.length : fresh.filter((date) => date < resume).length,
+      missed: Math.min(missedAll.length, MAX_BACKFILL_OCCURRENCES),
       // Если сегодняшний платёж уже создан, обещать его было бы неправдой
       dueToday: resume === today && !already.has(today),
       finished: resume === null,
+      truncated: missedAll.length > MAX_BACKFILL_OCCURRENCES,
     }
   },
 
-  /** Удаляет расписание. Уже созданные им операции остаются в истории. */
+  /**
+   * Удаляет расписание. Уже созданные им операции остаются в истории,
+   * а ожидающие вхождения уходят вместе с правилом: без него их не подтвердить,
+   * а висячая ссылка на удалённое расписание — ровно то, чего быть не должно.
+   */
   remove(id: Id): Promise<void> {
-    return db.recurringTransactions.delete(id)
+    return db.transaction('rw', db.recurringTransactions, db.pendingOccurrences, async () => {
+      await db.pendingOccurrences.where('recurringId').equals(id).delete()
+      await db.recurringTransactions.delete(id)
+    })
   },
 
   /** Сколько операций уже создано этим расписанием. */
@@ -273,10 +350,11 @@ export const recurringRepository = {
    * получишь июль, август и сентябрь.
    */
   async generateDue(today: IsoDate): Promise<GenerationResult> {
-    return db.transaction('rw', db.recurringTransactions, db.transactions, async () => {
+    return db.transaction('rw', db.recurringTransactions, db.transactions, db.pendingOccurrences, async () => {
       const due = await db.recurringTransactions.where('nextOccurrence').belowOrEqual(today).toArray()
 
       let created = 0
+      let pending = 0
       let rules = 0
       let finished = 0
 
@@ -293,14 +371,15 @@ export const recurringRepository = {
         }
 
         const result = await generateForRule(rule, today, MAX_OCCURRENCES_PER_RUN)
-        if (result.created > 0) {
+        if (result.created > 0 || result.pending > 0) {
           created += result.created
+          pending += result.pending
           rules += 1
         }
         if (result.finished) finished += 1
       }
 
-      return { created, rules, finished }
+      return { created, pending, rules, finished }
     })
   },
 }

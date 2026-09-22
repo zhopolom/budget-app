@@ -12,6 +12,22 @@ import { transactionsRepository } from '../../features/transactions/repository'
 import { useTransactionEditorData } from '../../features/transactions/useTransactionEditorData'
 import { draftFromTransaction } from '../../features/transactions/validation'
 import { toTransactionViews } from '../../features/transactions/views'
+import type { Transaction } from '../../types/entities'
+import { AdjustmentEditor } from './AdjustmentEditor'
+
+const DELETE_TITLES: Record<Transaction['type'], string> = {
+  expense: 'Удалить операцию?',
+  income: 'Удалить операцию?',
+  transfer: 'Удалить перевод?',
+  adjustment: 'Удалить корректировку?',
+}
+
+const PAGE_TITLES: Record<Transaction['type'], string> = {
+  expense: 'Операция',
+  income: 'Операция',
+  transfer: 'Перевод',
+  adjustment: 'Корректировка',
+}
 
 export function EditTransactionPage() {
   const id = useSearchParam('id')
@@ -35,7 +51,7 @@ export function EditTransactionPage() {
     const [view] = toTransactionViews([transaction], data.categories, data.accounts)
 
     const confirmed = await confirm({
-      title: transaction.type === 'transfer' ? 'Удалить перевод?' : 'Удалить операцию?',
+      title: DELETE_TITLES[transaction.type],
       message: `${describeTransaction(view, data.settings.baseCurrency)}. Это действие нельзя отменить.`,
       confirmLabel: 'Удалить',
       tone: 'danger',
@@ -52,7 +68,7 @@ export function EditTransactionPage() {
   }
 
   return (
-    <FullScreenLayout title={transaction?.type === 'transfer' ? 'Перевод' : 'Операция'} onClose={close}>
+    <FullScreenLayout title={transaction ? PAGE_TITLES[transaction.type] : 'Операция'} onClose={close}>
       {transaction === null && (
         <EmptyState
           icon="🔍"
@@ -62,7 +78,21 @@ export function EditTransactionPage() {
         />
       )}
 
-      {transaction && data && (
+      {transaction && data && transaction.type === 'adjustment' && (
+        <AdjustmentEditor
+          key={transaction.id}
+          transaction={transaction}
+          account={data.accounts.find((account) => account.id === transaction.accountId)}
+          currency={data.settings.baseCurrency}
+          onSaved={() => {
+            toast.show('Корректировка изменена')
+            close()
+          }}
+          onDelete={handleDelete}
+        />
+      )}
+
+      {transaction && data && transaction.type !== 'adjustment' && (
         <TransactionForm
           key={transaction.id}
           initial={draftFromTransaction(transaction)}

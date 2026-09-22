@@ -1,6 +1,8 @@
 import { db } from '../../db/database'
 import type { Category, Id } from '../../types/entities'
 import { createId } from '../../utils/id'
+import { templatesRepository } from '../budgets/templatesRepository'
+import { categoryRulesRepository } from '../rules/repository'
 import type { CategoryInput } from './validation'
 
 async function getCustom(id: Id): Promise<Category> {
@@ -48,7 +50,10 @@ export const categoriesRepository = {
    * битый categoryId в операциях оставлять нельзя, для этого есть replaceAndRemove.
    */
   async remove(id: Id): Promise<void> {
-    await db.transaction('rw', db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, async () => {
+    await db.transaction(
+      'rw',
+      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates, db.categoryRules],
+      async () => {
       await getCustom(id)
 
       // Проверка внутри той же транзакции: между подсчётом и удалением
@@ -59,8 +64,12 @@ export const categoriesRepository = {
       }
 
       await db.categoryBudgets.where('categoryId').equals(id).delete()
+      await templatesRepository.dropCategory(id)
+      // Правило на удалённую категорию применять некуда
+      await categoryRulesRepository.replaceCategory(id, null)
       await db.categories.delete(id)
-    })
+      },
+    )
   },
 
   /**
@@ -74,7 +83,10 @@ export const categoriesRepository = {
   async replaceAndRemove(sourceId: Id, targetId: Id): Promise<number> {
     if (sourceId === targetId) throw new Error('Выберите другую категорию')
 
-    return db.transaction('rw', db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, async () => {
+    return db.transaction(
+      'rw',
+      [db.categories, db.transactions, db.recurringTransactions, db.categoryBudgets, db.budgetTemplates, db.categoryRules],
+      async () => {
       const source = await getCustom(sourceId)
       const target = await db.categories.get(targetId)
       if (!target) throw new Error('Категория для переноса не найдена')
@@ -85,7 +97,7 @@ export const categoriesRepository = {
         .where('categoryId')
         .equals(sourceId)
         .modify((transaction) => {
-          if (transaction.type === 'transfer') return
+          if (transaction.type !== 'expense' && transaction.type !== 'income') return
           transaction.categoryId = targetId
           transaction.updatedAt = now
         })
@@ -104,10 +116,16 @@ export const categoriesRepository = {
       const left = await categoriesRepository.countUsage(sourceId)
       if (left.transactions > 0 || left.recurring > 0) throw new Error('Перенос операций не завершён')
 
+      // Лимиты и строки шаблонов удаляемой категории снимаются, а не переезжают:
+      // переносить их на чужой лимит значило бы молча изменить бюджет
       await db.categoryBudgets.where('categoryId').equals(sourceId).delete()
+      await templatesRepository.dropCategory(sourceId)
+      // Правила едут за операциями: они и дальше должны класть описание туда же, куда переехала история
+      await categoryRulesRepository.replaceCategory(sourceId, targetId)
       await db.categories.delete(sourceId)
 
       return moved
-    })
+      },
+    )
   },
 }

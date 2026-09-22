@@ -3,18 +3,21 @@ import type {
   Category,
   Id,
   IsoDate,
+  ManualTransactionType,
   RecurrenceFrequency,
+  RecurringExecutionMode,
   RecurringTransaction,
-  TransactionType,
 } from '../../types/entities'
 import type { ValidationResult } from '../../types/validation'
 import { isValidIsoDate } from '../../utils/dates'
 import { Money, PARSE_ERROR_MESSAGES } from '../../utils/money'
 import { isRecurringTransfer } from './model'
+import { MAX_RECURRING_INTERVAL } from './occurrences'
 import type { RecurringInput } from './repository'
 
 export const RECURRING_NOTE_MAX_LENGTH = 120
-export const MAX_INTERVAL = 99
+/** Граница общая с парсером копий — см. occurrences.ts. */
+export const MAX_INTERVAL = MAX_RECURRING_INTERVAL
 
 /**
  * Состояние формы. Поля всех трёх типов держим рядом, чтобы переключение
@@ -24,7 +27,7 @@ export const MAX_INTERVAL = 99
  * а черновик снимается один раз при открытии шторки и о нажатии кнопки не узнает.
  */
 export interface RecurringDraft {
-  type: TransactionType
+  type: ManualTransactionType
   amountText: string
   categoryId: Id | null
   accountId: Id | null
@@ -36,6 +39,7 @@ export interface RecurringDraft {
   startDate: IsoDate
   /** Пустая строка — повторять бессрочно. */
   endDate: string
+  executionMode: RecurringExecutionMode
 }
 
 export type RecurringField =
@@ -88,6 +92,7 @@ export function validateRecurringDraft(
     startDate: draft.startDate,
     // Поле необязательное: пустую строку в базу не пишем
     ...(endDate === '' ? {} : { endDate }),
+    executionMode: draft.executionMode,
   }
 
   const failed = (): ValidationResult<RecurringInput, RecurringField> => ({ ok: false, errors })
@@ -116,6 +121,8 @@ export function validateRecurringDraft(
 }
 
 export function draftFromRecurring(recurring: RecurringTransaction): RecurringDraft {
+  // Правила до 0.4 записаны без режима — они срабатывали автоматически
+  const executionMode: RecurringExecutionMode = recurring.executionMode === 'confirm' ? 'confirm' : 'automatic'
   const common = {
     amountText: Money.toInputString(recurring.amount),
     note: recurring.note,
@@ -123,6 +130,7 @@ export function draftFromRecurring(recurring: RecurringTransaction): RecurringDr
     intervalText: String(recurring.interval),
     startDate: recurring.startDate,
     endDate: recurring.endDate ?? '',
+    executionMode,
   }
 
   if (isRecurringTransfer(recurring)) {
@@ -159,5 +167,6 @@ export function emptyRecurringDraft(accountId: Id | null, today: IsoDate): Recur
     intervalText: '1',
     startDate: today,
     endDate: '',
+    executionMode: 'automatic',
   }
 }

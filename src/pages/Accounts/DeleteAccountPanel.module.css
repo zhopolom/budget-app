@@ -85,6 +85,12 @@
   opacity: 1;
 }
 
+.goals {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
 .actions {
   display: flex;
   flex-direction: column;

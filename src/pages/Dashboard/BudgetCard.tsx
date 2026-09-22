@@ -1,6 +1,7 @@
 import { Button } from '../../components/Button/Button'
 import { ProgressBar } from '../../components/ProgressBar/ProgressBar'
 import type { BudgetProgress } from '../../features/budgets/calculations'
+import type { DailyGuidance } from '../../features/forecast/service'
 import type { CurrencyCode } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
@@ -11,6 +12,8 @@ interface BudgetCardProps {
   /** «сентября» */
   monthGenitive: string
   currency: CurrencyCode
+  /** Ориентир на день из forecastService — только для текущего месяца с заданным бюджетом. */
+  guidance?: DailyGuidance | null
   onSetup: () => void
 }
 
@@ -23,7 +26,7 @@ function footerText(progress: BudgetProgress, currency: CurrencyCode): string {
   return `Осталось ${remaining} на ${progress.daysLeft} ${pluralRu(progress.daysLeft, ['день', 'дня', 'дней'])}`
 }
 
-export function BudgetCard({ progress, monthGenitive, currency, onSetup }: BudgetCardProps) {
+export function BudgetCard({ progress, monthGenitive, currency, guidance = null, onSetup }: BudgetCardProps) {
   const title = `Бюджет ${monthGenitive}`
 
   if (!progress) {
@@ -54,9 +57,29 @@ export function BudgetCard({ progress, monthGenitive, currency, onSetup }: Budge
 
       <ProgressBar value={progress.ratio} tone={progress.tone} label={`Израсходовано ${progress.percent}% бюджета`} />
 
-      <p className={styles.footer} data-tone={progress.tone}>
-        {footerText(progress, currency)}
-      </p>
+      {guidance && !progress.isOver ? (
+        // Ориентир на день (ТЗ §22): факты без оценок — сколько осталось и на сколько дней
+        <dl className={styles.guidance}>
+          <div className={styles.guidanceRow}>
+            <dt>Осталось бюджета</dt>
+            <dd>{Money.format(guidance.remainingBudget, currency)}</dd>
+          </div>
+          <div className={styles.guidanceRow}>
+            <dt>До конца месяца</dt>
+            <dd>
+              {guidance.daysRemaining} {pluralRu(guidance.daysRemaining, ['день', 'дня', 'дней'])}
+            </dd>
+          </div>
+          <div className={styles.guidanceRow} data-accent>
+            <dt>Ориентир</dt>
+            <dd>≈{Money.format(guidance.recommendedDailyBudget, currency)} / день</dd>
+          </div>
+        </dl>
+      ) : (
+        <p className={styles.footer} data-tone={progress.tone}>
+          {footerText(progress, currency)}
+        </p>
+      )}
     </section>
   )
 }

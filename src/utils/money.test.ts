@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { Money } from './money'
+import { isMoneyAmount, isNonNegativeMoneyAmount, isPositiveMoneyAmount, MAX_AMOUNT, Money } from './money'
 
 const plain = (text: string) => text.replace(/\u00A0/g, ' ').replace(/\u2212/g, '-')
 
@@ -66,5 +66,36 @@ describe('Money.formatCompact', () => {
 
   it('знак не показывает: направление задаёт сам экран', () => {
     expect(Money.formatCompact(-43_000)).toBe('430')
+  })
+})
+
+describe('политика денежных значений', () => {
+  const unrepresentable = [Number.NaN, Number.POSITIVE_INFINITY, Number.NEGATIVE_INFINITY, 1.5, '100', null, undefined]
+  const unsafe = [Number.MAX_SAFE_INTEGER + 1, 2 ** 53, MAX_AMOUNT + 1, -(MAX_AMOUNT + 1)]
+
+  it.each([...unrepresentable, ...unsafe])('%s — не денежное значение', (value) => {
+    expect(isMoneyAmount(value)).toBe(false)
+    expect(isNonNegativeMoneyAmount(value)).toBe(false)
+    expect(isPositiveMoneyAmount(value)).toBe(false)
+  })
+
+  it('границы: ноль, минус и MAX_AMOUNT', () => {
+    expect(isMoneyAmount(0)).toBe(true)
+    expect(isMoneyAmount(-1)).toBe(true)
+    expect(isMoneyAmount(MAX_AMOUNT)).toBe(true)
+    expect(isMoneyAmount(-MAX_AMOUNT)).toBe(true)
+
+    expect(isNonNegativeMoneyAmount(0)).toBe(true)
+    expect(isNonNegativeMoneyAmount(-1)).toBe(false)
+    expect(isNonNegativeMoneyAmount(MAX_AMOUNT)).toBe(true)
+
+    expect(isPositiveMoneyAmount(0)).toBe(false)
+    expect(isPositiveMoneyAmount(1)).toBe(true)
+    expect(isPositiveMoneyAmount(MAX_AMOUNT)).toBe(true)
+  })
+
+  it('парсер ввода и политика хранения согласны о верхней границе', () => {
+    expect(Money.parse('999999999,99')).toEqual({ ok: true, value: MAX_AMOUNT })
+    expect(isPositiveMoneyAmount(MAX_AMOUNT)).toBe(true)
   })
 })

@@ -3,9 +3,14 @@ import type {
   Account,
   AppSettings,
   Budget,
+  BudgetTemplate,
   Category,
   CategoryBudget,
+  CategoryRule,
+  ImportHistory,
+  PendingOccurrence,
   RecurringTransaction,
+  SavingsGoal,
   Transaction,
 } from '../types/entities'
 import { DB_VERSION, migrations } from './migrations'
@@ -21,6 +26,11 @@ export class BudgetDatabase extends Dexie {
   declare budgets: Table<Budget, string>
   declare categoryBudgets: Table<CategoryBudget, string>
   declare recurringTransactions: Table<RecurringTransaction, string>
+  declare pendingOccurrences: Table<PendingOccurrence, string>
+  declare savingsGoals: Table<SavingsGoal, string>
+  declare budgetTemplates: Table<BudgetTemplate, string>
+  declare importHistory: Table<ImportHistory, string>
+  declare categoryRules: Table<CategoryRule, string>
   declare settings: Table<AppSettings, string>
 
   constructor(name: string = DB_NAME) {

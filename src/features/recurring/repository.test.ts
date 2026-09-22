@@ -35,6 +35,7 @@ async function seedRule(
     id,
     nextOccurrence: nextOccurrence ?? base.startDate,
     isActive: isActive ?? true,
+    executionMode: 'automatic',
     createdAt: 1,
     updatedAt: 1,
   })

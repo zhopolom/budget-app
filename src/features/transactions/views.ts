@@ -1,5 +1,5 @@
 import type { Account, Category, Id, Transaction } from '../../types/entities'
-import { isTransfer } from './model'
+import { isEntry, isTransfer } from './model'
 
 /** Операция вместе со связанными сущностями — то, что нужно UI для отрисовки. */
 export interface TransactionView {
@@ -34,7 +34,8 @@ export function toTransactionViews(
     }
     return {
       transaction,
-      category: categoryById.get(transaction.categoryId),
+      // У корректировки категории нет — только счёт
+      category: isEntry(transaction) ? categoryById.get(transaction.categoryId) : undefined,
       account: account(transaction.accountId),
       fromAccount: undefined,
       toAccount: undefined,

@@ -43,6 +43,7 @@ async function seedRule(options: SeedOptions = {}): Promise<Id> {
     ...(options.endDate ? { endDate: options.endDate } : {}),
     nextOccurrence: options.nextOccurrence ?? startDate,
     isActive: options.isActive ?? true,
+    executionMode: 'automatic',
     createdAt: 1,
     updatedAt: 1,
   })
@@ -68,6 +69,7 @@ describe('resumeInfo', () => {
       missed: 7,
       dueToday: true,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -78,6 +80,7 @@ describe('resumeInfo', () => {
       missed: 8,
       dueToday: false,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -89,6 +92,7 @@ describe('resumeInfo', () => {
       missed: 0,
       dueToday: false,
       finished: false,
+      truncated: false,
     })
   })
 
@@ -100,6 +104,7 @@ describe('resumeInfo', () => {
       missed: 4,
       dueToday: false,
       finished: true,
+      truncated: false,
     })
   })
 })

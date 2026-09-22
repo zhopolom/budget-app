@@ -13,21 +13,23 @@ import { useAccountsOverview } from '../../features/accounts/useAccountsOverview
 import { groupByDay } from '../../features/transactions/grouping'
 import { useToday } from '../../hooks/useToday'
 import type { MinorUnits } from '../../types/entities'
-import { formatDayLabel, formatMonthGenitive } from '../../utils/dates'
+import { formatDayLabel, formatMonthAccusative } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
 import { AccountForm } from './AccountForm'
 import styles from './AccountPage.module.css'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
+import { ReconcileSheet } from './ReconcileSheet'
 import { useAccountData } from './useAccountData'
 
-type SheetMode = 'closed' | 'edit' | 'create' | 'delete'
+type SheetMode = 'closed' | 'edit' | 'create' | 'delete' | 'reconcile'
 
 const SHEET_TITLES: Record<SheetMode, string> = {
   closed: '',
   edit: 'Счёт',
   create: 'Новый счёт',
   delete: 'Удаление счёта',
+  reconcile: 'Сверка остатка',
 }
 
 export function AccountPage() {
@@ -69,18 +71,27 @@ export function AccountPage() {
             <p className={styles.count}>
               {data.totalCount} {pluralRu(data.totalCount, ['операция', 'операции', 'операций'])} за всё время
             </p>
-            <Button variant="secondary" onClick={() => setSheet('edit')} className={styles.edit}>
-              Изменить счёт
-            </Button>
+            <div className={styles.headerActions}>
+              <Button variant="secondary" onClick={() => setSheet('reconcile')}>
+                Сверить баланс
+              </Button>
+              <Button variant="secondary" onClick={() => setSheet('edit')}>
+                Изменить счёт
+              </Button>
+            </div>
           </section>
 
           <MonthSelector selection={selection} />
 
-          <section className={styles.tiles} aria-label={`Обороты за ${formatMonthGenitive(selection.month)}`}>
+          <section className={styles.tiles} aria-label={`Обороты за ${formatMonthAccusative(selection.month)}`}>
             <Tile label="Доходы" value={data.activity.income} currency={data.currency} tone="positive" />
             <Tile label="Расходы" value={data.activity.expense} currency={data.currency} />
             <Tile label="Пришло переводом" value={data.activity.transferIn} currency={data.currency} />
             <Tile label="Ушло переводом" value={data.activity.transferOut} currency={data.currency} />
+            {/* Корректировки редки — плитка появляется, только когда сверка что-то нашла */}
+            {data.activity.adjustment !== 0 && (
+              <Tile label="Корректировки" value={data.activity.adjustment} currency={data.currency} signed />
+            )}
           </section>
 
           {groups.length === 0 ? (
@@ -123,9 +134,20 @@ export function AccountPage() {
                 />
               )}
 
+              {sheet === 'reconcile' && (
+                <ReconcileSheet
+                  account={account}
+                  current={data.balance}
+                  currency={data.currency}
+                  today={today}
+                  onDone={() => setSheet('closed')}
+                />
+              )}
+
               {sheet === 'delete' && overview && (
                 <DeleteAccountPanel
                   account={account}
+                  balance={data.balance}
                   candidates={transferCandidates(account, overview.items)}
                   currency={data.currency}
                   onCancel={() => setSheet('edit')}
@@ -146,17 +168,20 @@ function Tile({
   value,
   currency,
   tone,
+  signed = false,
 }: {
   label: string
   value: MinorUnits
   currency: Parameters<typeof Money.format>[1]
   tone?: 'positive'
+  /** Показывать знак: у корректировок он и есть смысл. */
+  signed?: boolean
 }) {
   return (
     <div className={styles.tile}>
       <p className={styles.tileLabel}>{label}</p>
       <p className={styles.tileValue} data-tone={value > 0 ? tone : undefined} data-zero={value === 0 || undefined}>
-        {Money.format(value, currency)}
+        {Money.format(value, currency, { sign: signed ? 'always' : 'auto' })}
       </p>
     </div>
   )

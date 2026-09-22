@@ -6,9 +6,13 @@ import { AnalyticsPage } from '../pages/Analytics/AnalyticsPage'
 import { BudgetsPage } from '../pages/Budgets/BudgetsPage'
 import { CalendarPage } from '../pages/Calendar/CalendarPage'
 import { CategoriesPage } from '../pages/Categories/CategoriesPage'
+import { ConfirmOccurrencePage } from '../pages/Confirm/ConfirmOccurrencePage'
 import { DashboardPage } from '../pages/Dashboard/DashboardPage'
 import { EditTransactionPage } from '../pages/EditTransaction/EditTransactionPage'
+import { GoalsPage } from '../pages/Goals/GoalsPage'
+import { ImportPage } from '../pages/Import/ImportPage'
 import { RecurringPage } from '../pages/Recurring/RecurringPage'
+import { RulesPage } from '../pages/Rules/RulesPage'
 import { SettingsPage } from '../pages/Settings/SettingsPage'
 import { TransactionsPage } from '../pages/Transactions/TransactionsPage'
 import { AppLayout } from './AppLayout'
@@ -26,12 +30,16 @@ const TAB_ROUTES: Record<string, ComponentType> = {
   '/categories': CategoriesPage,
   '/budgets': BudgetsPage,
   '/recurring': RecurringPage,
+  '/goals': GoalsPage,
+  '/rules': RulesPage,
 }
 
 /** Полноэкранные экраны без нижней навигации. */
 const FULLSCREEN_ROUTES: Record<string, ComponentType> = {
   '/add': AddTransactionPage,
   '/edit': EditTransactionPage,
+  '/confirm': ConfirmOccurrencePage,
+  '/import': ImportPage,
 }
 
 function RedirectHome() {

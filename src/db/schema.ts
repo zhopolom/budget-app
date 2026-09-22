@@ -47,3 +47,43 @@ export const SCHEMA_V2 = {
 export const SCHEMA_V3 = {
   recurringTransactions: 'id, nextOccurrence, createdAt, accountId, fromAccountId, toAccountId, categoryId',
 } as const satisfies Record<string, string>
+
+/**
+ * v4 — режим подтверждения регулярных операций.
+ *
+ * pendingOccurrences:
+ *   &[recurringId+scheduledDate] — одно вхождение на день расписания: та же
+ *   защита от дублей, что и у операций. status индексируем ради списка
+ *   «ожидают подтверждения» на главной, recurringId — ради удаления правила.
+ */
+export const SCHEMA_V4 = {
+  pendingOccurrences: 'id, &[recurringId+scheduledDate], recurringId, status, scheduledDate',
+} as const satisfies Record<string, string>
+
+/**
+ * v5 — цели накоплений и шаблоны бюджета.
+ *
+ * savingsGoals: linkedAccountId индексируем ради удаления счёта — цели
+ * находятся запросом, а не перебором. isArchived не индексируем: булевы ключи
+ * IndexedDB не умеет, а таблица маленькая.
+ */
+export const SCHEMA_V5 = {
+  savingsGoals: 'id, linkedAccountId, createdAt',
+  budgetTemplates: 'id, createdAt',
+} as const satisfies Record<string, string>
+
+/**
+ * v6 — импорт CSV и правила категорий.
+ *
+ * transactions: индекс importBatchId — откат импорта находит свою партию
+ * запросом, а не перебором истории. Остальные индексы повторяются: Dexie
+ * задаёт таблице полный список, а не разницу.
+ * categoryRules: priority — для порядка применения, categoryId и accountId —
+ * для удаления категории и счёта.
+ */
+export const SCHEMA_V6 = {
+  transactions:
+    'id, date, [date+createdAt], type, categoryId, accountId, fromAccountId, toAccountId, &[recurringId+occurrenceDate], importBatchId',
+  importHistory: 'id, importedAt',
+  categoryRules: 'id, priority, categoryId, accountId, createdAt',
+} as const satisfies Record<string, string>

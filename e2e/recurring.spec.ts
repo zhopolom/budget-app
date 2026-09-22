@@ -149,6 +149,8 @@ test('возобновление в день платежа: число в ди�
   await expect(dialog).toContainText('Сегодняшний платёж будет создан в любом случае')
 
   await confirmButton(page, 'Не создавать').click()
+  // Дождаться записи в базу: перезагрузка сразу после нажатия обгоняла её
+  await expect(page.getByText('Активна', { exact: true })).toBeVisible()
   await page.reload()
 
   // Ровно один платёж — сегодняшний, как и было обещано

@@ -10,6 +10,7 @@ import type { ThemePreference } from '../../types/entities'
 import { Money } from '../../utils/money'
 import { CurrencySheet } from './CurrencySheet'
 import { DataSection } from './DataSection'
+import { ImportSection } from './ImportSection'
 import styles from './SettingsPage.module.css'
 
 // В production-сборку не попадает: import.meta.env.DEV заменяется на false
@@ -52,6 +53,9 @@ export function SettingsPage() {
             <ListRow icon="🎯" title="Бюджет и лимиты" chevron onClick={() => navigate('/budgets')} />
           </ListItem>
           <ListItem>
+            <ListRow icon="🏁" title="Цели накоплений" chevron onClick={() => navigate('/goals')} />
+          </ListItem>
+          <ListItem>
             <ListRow icon="💳" title="Счета" chevron onClick={() => navigate('/accounts')} />
           </ListItem>
           <ListItem>
@@ -66,8 +70,13 @@ export function SettingsPage() {
           <ListItem>
             <ListRow icon="🔁" title="Регулярные операции" chevron onClick={() => navigate('/recurring')} />
           </ListItem>
+          <ListItem>
+            <ListRow icon="🏷️" title="Правила категорий" chevron onClick={() => navigate('/rules')} />
+          </ListItem>
         </ListCard>
       </section>
+
+      <ImportSection />
 
       <DataSection />
 

@@ -66,3 +66,43 @@
 .setup {
   align-self: flex-start;
 }
+
+.guidance {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 2px 0 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--line);
+}
+
+.guidanceRow {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.guidanceRow dt {
+  font-size: 14px;
+  color: var(--ink-2);
+}
+
+.guidanceRow dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 15px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.guidanceRow[data-accent] dt {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.guidanceRow[data-accent] dd {
+  font-size: 16px;
+  font-weight: 700;
+}

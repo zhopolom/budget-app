@@ -1,4 +1,5 @@
 import { db } from '../../db/database'
+import { isPositiveMoneyAmount } from '../../utils/money'
 import type { Id, IsoDate, Transaction } from '../../types/entities'
 import { createId } from '../../utils/id'
 import { settingsRepository } from '../settings/repository'
@@ -18,6 +19,11 @@ function byAccount(accountId: Id) {
     .equals(accountId)
     .or('toAccountId')
     .equals(accountId)
+}
+
+/** Последняя проверка перед записью: сумма строго положительная и в пределах политики Money. */
+function assertAmount(value: unknown): void {
+  if (!isPositiveMoneyAmount(value)) throw new RangeError('Сумма операции вне допустимых пределов')
 }
 
 export const transactionsRepository = {
@@ -40,6 +46,7 @@ export const transactionsRepository = {
 
   /** Сохраняет операцию и запоминает счёт как выбранный по умолчанию. */
   async create(input: TransactionInput): Promise<Transaction> {
+    assertAmount(input.amount)
     const now = Date.now()
     const transaction = { ...input, id: createId(), createdAt: now, updatedAt: now } as Transaction
 
@@ -57,6 +64,7 @@ export const transactionsRepository = {
    * и accountId — операция считалась бы и переводом, и расходом сразу.
    */
   async update(id: Id, input: TransactionInput): Promise<void> {
+    assertAmount(input.amount)
     await db.transaction('rw', db.transactions, async () => {
       const existing = await db.transactions.get(id)
       if (!existing) throw new Error('Операция не найдена')
@@ -67,6 +75,10 @@ export const transactionsRepository = {
         // Связь с регулярной операцией сохраняем: она защищает от повторной генерации
         ...(existing.recurringId ? { recurringId: existing.recurringId } : {}),
         ...(existing.occurrenceDate ? { occurrenceDate: existing.occurrenceDate } : {}),
+        // Метаданные импорта — тоже: без них откат партии и поиск дублей потеряли бы запись
+        ...(existing.source ? { source: existing.source } : {}),
+        ...(existing.importBatchId ? { importBatchId: existing.importBatchId } : {}),
+        ...(existing.sourceFingerprint ? { sourceFingerprint: existing.sourceFingerprint } : {}),
         createdAt: existing.createdAt,
         updatedAt: Date.now(),
       } as Transaction)

@@ -111,6 +111,41 @@ export function formatMonthGenitive(ym: YearMonth): string {
   return format(firstDayOf(ym), 'MMMM', { locale: ru })
 }
 
+/**
+ * Падежи, которых нет в date-fns: «за сентябрь» (винительный совпадает
+ * с именительным), «к сентябрю», «в сентябре». Всё в нижнем регистре —
+ * как внутри фразы.
+ */
+const MONTH_CASES = [
+  ['январь', 'январю', 'январе'],
+  ['февраль', 'февралю', 'феврале'],
+  ['март', 'марту', 'марте'],
+  ['апрель', 'апрелю', 'апреле'],
+  ['май', 'маю', 'мае'],
+  ['июнь', 'июню', 'июне'],
+  ['июль', 'июлю', 'июле'],
+  ['август', 'августу', 'августе'],
+  ['сентябрь', 'сентябрю', 'сентябре'],
+  ['октябрь', 'октябрю', 'октябре'],
+  ['ноябрь', 'ноябрю', 'ноябре'],
+  ['декабрь', 'декабрю', 'декабре'],
+] as const
+
+/** «сентябрь» — «за сентябрь», «лимит на сентябрь». */
+export function formatMonthAccusative(ym: YearMonth): string {
+  return MONTH_CASES[ym.month - 1][0]
+}
+
+/** «сентябрю» — «применить к сентябрю». */
+export function formatMonthDative(ym: YearMonth): string {
+  return MONTH_CASES[ym.month - 1][1]
+}
+
+/** «сентябре» — «в сентябре». */
+export function formatMonthPrepositional(ym: YearMonth): string {
+  return MONTH_CASES[ym.month - 1][2]
+}
+
 function dayDiff(iso: IsoDate, today: IsoDate): number {
   const msPerDay = 86_400_000
   // Через UTC, чтобы переход на летнее время не давал 23/25 часов
