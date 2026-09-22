@@ -165,6 +165,24 @@ describe('миграция v2 → v3', () => {
     expect(transaction && 'categoryId' in transaction && transaction.categoryId).toBe(OTHER.id)
     upgraded.close()
   })
+
+  it('чинит битую категорию и у правила, не останавливая его', async () => {
+    // Счёт у правила живой — ломается только категория
+    await writeV2Database({
+      recurring: [{ ...ORPHAN_RULE, accountId: CARD.id, categoryId: 'cat-deleted' }],
+    })
+
+    const upgraded = await openUpgraded()
+
+    const rule = await upgraded.recurringTransactions.get(ORPHAN_RULE.id)
+    expect(rule && 'categoryId' in rule && rule.categoryId).toBe(OTHER.id)
+    // Из-за одной категории расписание останавливать не за что
+    expect(rule?.isActive).toBe(true)
+    // И «Восстановленный счёт» ради этого не создаётся
+    expect(await upgraded.accounts.get(RECOVERED_ACCOUNT_ID)).toBeUndefined()
+
+    upgraded.close()
+  })
 })
 
 describe('повторный ремонт', () => {

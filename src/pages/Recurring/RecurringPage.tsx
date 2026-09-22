@@ -78,8 +78,14 @@ export function RecurringPage() {
     }
 
     try {
-      await recurringRepository.setActive(recurring.id, true, today, { backfill })
-      toast.show(backfill ? 'Пропущенные платежи будут созданы' : 'Регулярная операция включена')
+      // Досоздание происходит здесь же, поэтому в тосте настоящее число,
+      // а не обещание: перезапускать приложение не нужно
+      const created = await recurringRepository.setActive(recurring.id, true, today, { backfill })
+      toast.show(
+        created > 0
+          ? `Создано ${created} ${pluralRu(created, ['платёж', 'платежа', 'платежей'])}`
+          : 'Регулярная операция включена',
+      )
     } catch (error) {
       toast.show(error instanceof Error ? error.message : 'Не удалось включить', { tone: 'error' })
     }

@@ -2,6 +2,7 @@ import { db } from '../../db/database'
 import type { Account, CurrencyCode, Id, RecurringTransaction, Timestamp } from '../../types/entities'
 import { createId } from '../../utils/id'
 import { Money } from '../../utils/money'
+import { isSelfTransferRule } from '../recurring/model'
 import { SETTINGS_ID } from '../settings/defaults'
 import type { AccountInput } from './validation'
 
@@ -219,16 +220,16 @@ async function moveRecurring(
       touched.add(rule.id)
     })
 
+  // Смотрим только на перенесённые правила: чужой перевод внутри счёта,
+  // который был здесь до этого удаления, выключать не за что
   const stopped: RecurringTransaction[] = []
-  await db.recurringTransactions
-    .where('fromAccountId')
-    .equals(targetId)
-    .modify((rule) => {
-      if (rule.type !== 'transfer' || rule.toAccountId !== targetId || !rule.isActive) return
-      rule.isActive = false
-      rule.updatedAt = now
-      stopped.push({ ...rule })
-    })
+  for (const id of touched) {
+    const rule = await db.recurringTransactions.get(id)
+    if (!rule || !isSelfTransferRule(rule) || !rule.isActive) continue
+
+    await db.recurringTransactions.update(id, { isActive: false, updatedAt: now })
+    stopped.push({ ...rule, isActive: false, updatedAt: now })
+  }
 
   return { moved: touched.size, stopped }
 }

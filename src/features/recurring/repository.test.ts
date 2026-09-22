@@ -20,19 +20,21 @@ const spotify = (patch: Partial<RecurringEntryInput> = {}): RecurringEntryInput 
   frequency: 'monthly',
   interval: 1,
   startDate: '2026-07-14',
-  isActive: true,
   ...patch,
 })
 
 /** Расписание прямо в базу: create сдвигает первое вхождение на сегодня. */
-async function seedRule(patch: Partial<RecurringEntryInput> & { nextOccurrence?: string } = {}): Promise<Id> {
-  const { nextOccurrence, ...input } = patch
+async function seedRule(
+  patch: Partial<RecurringEntryInput> & { nextOccurrence?: string; isActive?: boolean } = {},
+): Promise<Id> {
+  const { nextOccurrence, isActive, ...input } = patch
   const base = spotify(input)
   const id = `rule-${await db.recurringTransactions.count()}`
   await db.recurringTransactions.add({
     ...base,
     id,
     nextOccurrence: nextOccurrence ?? base.startDate,
+    isActive: isActive ?? true,
     createdAt: 1,
     updatedAt: 1,
   })

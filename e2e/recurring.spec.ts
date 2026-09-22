@@ -46,7 +46,15 @@ test('счёт с регулярным платежом удаляется то�
   )
 })
 
-test('пауза и возобновление не создают платежей задним числом', async ({ page }) => {
+/**
+ * Сам баг v0.2 (включение досоздавало платежи за всю паузу) в браузере не
+ * воспроизвести: для него нужна пауза длиной в месяцы, а часы в e2e не
+ * перевести. Это проверяют юнит-тесты в features/recurring/bugs.test.ts.
+ *
+ * Здесь проверяется то, что видно только в живом интерфейсе: пауза держится
+ * после сохранения формы, а переключение туда-обратно не плодит операций.
+ */
+test('пауза держится, а переключение не плодит операций', async ({ page }) => {
   await openApp(page)
   await createRule(page, 'Карта', 'Аренда')
 
@@ -59,13 +67,21 @@ test('пауза и возобновление не создают платеж�
   await page.getByRole('button', { name: 'Отключить' }).click()
   await expect(page.getByText('Отключена', { exact: true })).toBeVisible()
 
+  // Кнопка и форма живут в одной шторке: сохранение не должно возвращать
+  // правило в строй — иначе платёж, от которого отказались, придёт снова
+  await page.getByLabel('Сумма').fill('1500')
+  await page.getByRole('button', { name: 'Сохранить' }).click()
+
+  await page.reload()
+  await expect(page.getByRole('button', { name: /Аренда.*отключена/ })).toBeVisible()
+  await expectTransactions(page, 'Аренда', 1)
+
+  await page.getByRole('button', { name: /Аренда/ }).click()
   await page.getByRole('button', { name: 'Включить' }).click()
   // Пропущенных платежей нет — спрашивать не о чем
   await expect(page.getByRole('alertdialog')).toHaveCount(0)
   await expect(page.getByText('Активна', { exact: true })).toBeVisible()
 
-  // Баг v0.2: следующее вхождение оставалось в прошлом, и включение создавало
-  // платежи за всю паузу. Теперь оно считается от сегодня — дублей не будет
   await page.reload()
   await expectTransactions(page, 'Аренда', 1)
 })
@@ -86,9 +102,17 @@ test('подтверждение удаления правила называе�
   await expectTransactions(page, 'Подписка', 1)
 })
 
-/** Сколько раз операция с таким комментарием встречается в списке операций. */
+/**
+ * Сколько раз операция с таким комментарием встречается в списке операций.
+ * Считаем строго внутри списка: то же слово есть и в названии расписания,
+ * и в тостах, и счёт по всей странице ничего бы не доказывал.
+ */
 async function expectTransactions(page: Page, note: string, count: number) {
   await page.getByRole('navigation', { name: 'Основная навигация' }).getByRole('link', { name: 'Операции' }).click()
-  await expect(page.getByText(note, { exact: true })).toHaveCount(count)
+  await expect(page.getByRole('heading', { name: 'Операции' })).toBeVisible()
+
+  // Считаем строки списка, а не вхождения текста: то же слово стоит в названии
+  // расписания и мелькает в тостах, и счёт по всей странице ничего бы не доказал
+  await expect(page.getByRole('button', { name: new RegExp(`(^|\\s)${note}(\\s|$)`) })).toHaveCount(count)
   await page.goBack()
 }

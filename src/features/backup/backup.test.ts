@@ -56,7 +56,6 @@ async function fillDatabase(): Promise<void> {
       frequency: 'monthly',
       interval: 1,
       startDate: '2026-09-14',
-      isActive: true,
     },
     '2026-09-21',
   )
@@ -128,7 +127,6 @@ describe('restoreBackup', () => {
         frequency: 'monthly',
         interval: 1,
         startDate: '2026-09-14',
-        isActive: true,
       },
       '2026-09-14',
     )
@@ -304,7 +302,6 @@ describe('регулярные переводы в копии', () => {
         frequency: 'monthly',
         interval: 1,
         startDate: '2026-09-14',
-        isActive: true,
       },
       '2026-09-14',
     )
