@@ -75,6 +75,10 @@ export const transactionsRepository = {
         // Связь с регулярной операцией сохраняем: она защищает от повторной генерации
         ...(existing.recurringId ? { recurringId: existing.recurringId } : {}),
         ...(existing.occurrenceDate ? { occurrenceDate: existing.occurrenceDate } : {}),
+        // Метаданные импорта — тоже: без них откат партии и поиск дублей потеряли бы запись
+        ...(existing.source ? { source: existing.source } : {}),
+        ...(existing.importBatchId ? { importBatchId: existing.importBatchId } : {}),
+        ...(existing.sourceFingerprint ? { sourceFingerprint: existing.sourceFingerprint } : {}),
         createdAt: existing.createdAt,
         updatedAt: Date.now(),
       } as Transaction)
