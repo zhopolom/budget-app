@@ -5,6 +5,8 @@ import type {
   BudgetTemplate,
   Category,
   CategoryBudget,
+  CategoryRule,
+  ImportHistory,
   PendingOccurrence,
   RecurringTransaction,
   SavingsGoal,
@@ -71,6 +73,8 @@ const CATEGORY_TYPES = new Set(['expense', 'income'])
 const FREQUENCIES = new Set(['daily', 'weekly', 'monthly', 'yearly'])
 const EXECUTION_MODES = new Set(['automatic', 'confirm'])
 const OCCURRENCE_STATUSES = new Set(['pending', 'confirmed', 'skipped'])
+const TRANSACTION_SOURCES = new Set(['manual', 'recurring', 'csv', 'adjustment'])
+const RULE_MATCH_TYPES = new Set(['contains', 'startsWith', 'exact'])
 const THEMES = new Set(['system', 'light', 'dark'])
 
 function parseAccount(value: unknown): Account | null {
@@ -113,6 +117,7 @@ function parseCategory(value: unknown): Category | null {
 function parseTransaction(value: unknown): Transaction | null {
   if (!isObject(value)) return null
   const { id, type, amount, date, note, createdAt, updatedAt, recurringId, occurrenceDate } = value
+  const { source, importBatchId, sourceFingerprint } = value
   if (!isId(id) || !isPositiveMoneyAmount(amount) || !isDate(date)) return null
 
   const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
@@ -127,6 +132,10 @@ function parseTransaction(value: unknown): Transaction | null {
     ...(isId(recurringId) && isDate(occurrenceDate)
       ? { recurringId, occurrenceDate: occurrenceDate as string }
       : {}),
+    // Метаданные импорта (v6): без них откат партии и поиск дублей потеряли бы запись
+    ...(typeof source === 'string' && TRANSACTION_SOURCES.has(source) ? { source: source as Transaction['source'] } : {}),
+    ...(isId(importBatchId) ? { importBatchId } : {}),
+    ...(isId(sourceFingerprint) ? { sourceFingerprint } : {}),
   }
 
   if (type === 'transfer') {
@@ -303,6 +312,48 @@ function parsePendingOccurrence(value: unknown): PendingOccurrence | null {
   }
 }
 
+/** Запись истории импорта (v6). Сам файл в копии не хранится. */
+function parseImportHistory(value: unknown): ImportHistory | null {
+  if (!isObject(value)) return null
+  const { id, fileName, accountId, importedAt, count, skippedCount, duplicateCount, errorCount, rolledBackAt } = value
+  if (!isId(id) || !isText(fileName) || !isId(accountId) || !isTimestamp(importedAt)) return null
+  const counter = (raw: unknown) => (typeof raw === 'number' && Number.isInteger(raw) && raw >= 0 ? raw : 0)
+  return {
+    id,
+    fileName,
+    accountId,
+    importedAt,
+    count: counter(count),
+    skippedCount: counter(skippedCount),
+    duplicateCount: counter(duplicateCount),
+    errorCount: counter(errorCount),
+    ...(isTimestamp(rolledBackAt) ? { rolledBackAt } : {}),
+  }
+}
+
+/** Правило категории (v6). Ссылки на категорию и счёт чинит ремонт после восстановления. */
+function parseCategoryRule(value: unknown): CategoryRule | null {
+  if (!isObject(value)) return null
+  const { id, name, enabled, matchType, pattern, categoryId, accountId, priority, createdAt, updatedAt } = value
+  if (!isId(id) || !isText(pattern) || pattern.trim() === '' || !isId(categoryId)) return null
+  if (typeof matchType !== 'string' || !RULE_MATCH_TYPES.has(matchType)) return null
+  if (typeof priority !== 'number' || !Number.isInteger(priority) || priority < 0 || priority > 999) return null
+
+  const stamp = isTimestamp(createdAt) ? createdAt : Date.now()
+  return {
+    id,
+    name: isText(name) && name.trim() !== '' ? name : pattern,
+    enabled: enabled !== false,
+    matchType: matchType as CategoryRule['matchType'],
+    pattern,
+    categoryId,
+    ...(isId(accountId) ? { accountId } : {}),
+    priority,
+    createdAt: stamp,
+    updatedAt: isTimestamp(updatedAt) ? updatedAt : stamp,
+  }
+}
+
 function parseSettings(value: unknown): AppSettings {
   const defaults = createDefaultSettings()
   if (!isObject(value)) return defaults
@@ -353,8 +404,16 @@ function countDangling(data: BackupData): number {
   const brokenGoals = data.savingsGoals.filter(
     (goal) => goal.linkedAccountId !== undefined && !accounts.has(goal.linkedAccountId),
   ).length
+  const brokenRules = data.categoryRules.filter(
+    (rule) => !categories.has(rule.categoryId) || (rule.accountId !== undefined && !accounts.has(rule.accountId)),
+  ).length
 
-  return data.transactions.filter(isBroken).length + data.recurringTransactions.filter(isBroken).length + brokenGoals
+  return (
+    data.transactions.filter(isBroken).length +
+    data.recurringTransactions.filter(isBroken).length +
+    brokenGoals +
+    brokenRules
+  )
 }
 
 export function parseBackup(text: string): ParseBackupResult {
@@ -405,6 +464,12 @@ export function parseBackup(text: string): ParseBackupResult {
   const budgetTemplates = parseList(source.budgetTemplates, parseBudgetTemplate, 'шаблоны бюджета')
   if (typeof budgetTemplates === 'string') return { ok: false, error: budgetTemplates }
 
+  const importHistory = parseList(source.importHistory, parseImportHistory, 'история импорта')
+  if (typeof importHistory === 'string') return { ok: false, error: importHistory }
+
+  const categoryRules = parseList(source.categoryRules, parseCategoryRule, 'правила категорий')
+  if (typeof categoryRules === 'string') return { ok: false, error: categoryRules }
+
   // Лимиты v1, перенесённые миграцией, могут дублировать друг друга:
   // дубли не схлопываем, их найдёт validateBackup и откажет от файла целиком
   const parsed: BackupData = {
@@ -417,6 +482,8 @@ export function parseBackup(text: string): ParseBackupResult {
     pendingOccurrences,
     savingsGoals,
     budgetTemplates,
+    importHistory,
+    categoryRules,
     settings: parseSettings(source.settings),
   }
 

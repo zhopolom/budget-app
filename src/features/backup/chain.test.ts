@@ -114,6 +114,28 @@ const V5 = file(5, {
   settings: { ...SETTINGS, lastBackupAt: null, backupReminderSnoozedUntil: null },
 })
 
+const V6 = file(6, {
+  accounts: ACCOUNTS,
+  categories: CATEGORIES,
+  transactions: [
+    ...ENTRIES,
+    { id: 't-csv', type: 'expense', amount: 19_900, categoryId: 'cat-exp-groceries', accountId: 'card', date: '2026-09-23', note: 'SPOTIFY Premium', source: 'csv', importBatchId: 'imp-1', sourceFingerprint: '0123456789abcdef', createdAt: 20, updatedAt: 20 },
+  ],
+  budgets: [],
+  categoryBudgets: [],
+  recurringTransactions: [],
+  pendingOccurrences: [],
+  savingsGoals: [],
+  budgetTemplates: [],
+  importHistory: [{ id: 'imp-1', fileName: 'bank.csv', accountId: 'card', importedAt: 20, count: 1, skippedCount: 0, duplicateCount: 0, errorCount: 0 }],
+  categoryRules: [
+    { id: 'rule-1', name: 'Spotify', enabled: true, matchType: 'contains', pattern: 'spotify', categoryId: 'cat-exp-groceries', priority: 10, createdAt: 21, updatedAt: 21 },
+    // Правило на удалённую категорию: ремонт его снимет
+    { id: 'rule-gone', name: 'x', enabled: true, matchType: 'exact', pattern: 'x', categoryId: 'cat-gone', priority: 1, createdAt: 22, updatedAt: 22 },
+  ],
+  settings: { ...SETTINGS, lastBackupAt: null, backupReminderSnoozedUntil: null },
+})
+
 async function restoreFile(text: string) {
   const parsed = parseBackup(text)
   if (!parsed.ok) throw new Error(parsed.error)
@@ -127,12 +149,12 @@ describe('цепочки копий до текущей версии', () => {
   it('свежая установка сразу на последней схеме', () => {
     expect(db.verno).toBe(DB_VERSION)
     expect(DB_VERSION).toBe(6)
-    expect(BACKUP_SCHEMA_VERSION).toBe(5)
+    expect(BACKUP_SCHEMA_VERSION).toBe(6)
   })
 
   it('копия 0.1 → текущая база: лимиты переехали, баланс тот же', async () => {
     const parsed = await restoreFile(V1)
-    expect(parsed.migrationSteps).toEqual([2, 3, 4, 5])
+    expect(parsed.migrationSteps).toEqual([2, 3, 4, 5, 6])
 
     expect(await db.transactions.count()).toBe(2)
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
@@ -145,7 +167,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.2 → текущая база: расписание стало автоматическим', async () => {
     const parsed = await restoreFile(V2)
-    expect(parsed.migrationSteps).toEqual([3, 4, 5])
+    expect(parsed.migrationSteps).toEqual([3, 4, 5, 6])
 
     expect(await db.transactions.count()).toBe(3)
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
@@ -155,7 +177,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.3 → текущая база: регулярный перевод и настройки на месте', async () => {
     const parsed = await restoreFile(V3)
-    expect(parsed.migrationSteps).toEqual([4, 5])
+    expect(parsed.migrationSteps).toEqual([4, 5, 6])
 
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(EXPECTED_BALANCE)
     const rules = await db.recurringTransactions.orderBy('id').toArray()
@@ -168,7 +190,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.4 → текущая база: корректировка, режим и вхождение переносятся как есть', async () => {
     const parsed = await restoreFile(V4)
-    expect(parsed.migrationSteps).toEqual([5])
+    expect(parsed.migrationSteps).toEqual([5, 6])
 
     // Корректировка −10 ₴ на наличных
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(
@@ -180,7 +202,7 @@ describe('цепочки копий до текущей версии', () => {
 
   it('копия 0.5 → текущая база: цели, шаблоны и перенос остатка на месте, битые ссылки починены', async () => {
     const parsed = await restoreFile(V5)
-    expect(parsed.migrationSteps).toEqual([])
+    expect(parsed.migrationSteps).toEqual([6])
     expect(parsed.danglingReferences).toBe(1)
 
     expect((await db.categoryBudgets.get('2026-08:cat-exp-groceries'))?.rollover).toBe(true)
@@ -195,6 +217,20 @@ describe('цепочки копий до текущей версии', () => {
     // Общий баланс: 32 620 + 2 000 начального остатка копилки
     expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(
       EXPECTED_BALANCE + Money.fromMajor(2_000),
+    )
+  })
+
+  it('копия 0.6 → текущая база: метаданные импорта, история и правила на месте', async () => {
+    const parsed = await restoreFile(V6)
+    expect(parsed.migrationSteps).toEqual([])
+    expect(parsed.danglingReferences).toBe(1)
+
+    expect(await db.transactions.get('t-csv')).toMatchObject({ source: 'csv', importBatchId: 'imp-1', sourceFingerprint: '0123456789abcdef' })
+    expect(await db.importHistory.get('imp-1')).toMatchObject({ fileName: 'bank.csv', count: 1 })
+    expect(await db.categoryRules.get('rule-1')).toMatchObject({ pattern: 'spotify', enabled: true })
+    expect(await db.categoryRules.get('rule-gone')).toBeUndefined()
+    expect(calculateTotalBalance(await db.accounts.toArray(), await db.transactions.toArray())).toBe(
+      EXPECTED_BALANCE - Money.fromMajor(199),
     )
   })
 

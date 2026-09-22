@@ -5,6 +5,8 @@ import type {
   BudgetTemplate,
   Category,
   CategoryBudget,
+  CategoryRule,
+  ImportHistory,
   PendingOccurrence,
   RecurringTransaction,
   SavingsGoal,
@@ -24,8 +26,11 @@ import type {
  *
  * v5 добавила цели накоплений, шаблоны бюджета и флаг переноса остатка
  * у лимитов категорий. Новые разделы у старых копий пусты, флаг — выключен.
+ *
+ * v6 добавила историю импорта, правила категорий и метаданные источника
+ * у операций (source, importBatchId, sourceFingerprint).
  */
-export const BACKUP_SCHEMA_VERSION = 5
+export const BACKUP_SCHEMA_VERSION = 6
 
 /** Метка приложения: чтобы не пытаться восстановиться из чужого JSON. */
 export const BACKUP_APP = 'budget'
@@ -40,6 +45,8 @@ export interface BackupData {
   pendingOccurrences: PendingOccurrence[]
   savingsGoals: SavingsGoal[]
   budgetTemplates: BudgetTemplate[]
+  importHistory: ImportHistory[]
+  categoryRules: CategoryRule[]
   settings: AppSettings
 }
 
@@ -63,6 +70,8 @@ export interface BackupCounts {
   pendingOccurrences: number
   savingsGoals: number
   budgetTemplates: number
+  importHistory: number
+  categoryRules: number
 }
 
 export function countBackup(data: BackupData): BackupCounts {
@@ -76,6 +85,8 @@ export function countBackup(data: BackupData): BackupCounts {
     pendingOccurrences: data.pendingOccurrences.length,
     savingsGoals: data.savingsGoals.length,
     budgetTemplates: data.budgetTemplates.length,
+    importHistory: data.importHistory.length,
+    categoryRules: data.categoryRules.length,
   }
 }
 

@@ -537,9 +537,9 @@ describe('CSV', () => {
     const [header, expenseRow, transferRow] = csv.split('\r\n')
 
     expect(header).toBe(CSV_HEADER.join(','))
-    expect(expenseRow).toBe('2026-09-21,Расход,-430.50,UAH,Продукты,Карта,,,"АТБ, вечер"')
+    expect(expenseRow).toBe('2026-09-21,Расход,-430.50,UAH,Продукты,Карта,,,"АТБ, вечер",Вручную')
     // Название счёта с запятой тоже должно быть в кавычках
-    expect(transferRow).toBe('2026-09-19,Перевод,1000.00,UAH,,,Карта,"Наличные, старые",')
+    expect(transferRow).toBe('2026-09-19,Перевод,1000.00,UAH,,,Карта,"Наличные, старые",,Вручную')
   })
 
   it('удалённые счета и категории оставляют колонку пустой', () => {
@@ -557,8 +557,18 @@ describe('CSV', () => {
       },
     ]
     expect(toCsv(toTransactionViews(orphan, CATEGORIES, ACCOUNTS), 'UAH').split('\r\n')[1]).toBe(
-      '2026-09-21,Расход,-1.00,UAH,,,,,',
+      '2026-09-21,Расход,-1.00,UAH,,,,,,Вручную',
     )
+  })
+
+  it('колонка Source называет происхождение: импорт, расписание, сверка (ТЗ §66)', () => {
+    const rows: Transaction[] = [
+      { id: 'c', type: 'expense', amount: 100, categoryId: 'ghost', accountId: 'ghost', date: '2026-09-21', note: '', source: 'csv', importBatchId: 'b', createdAt: 1, updatedAt: 1 },
+      { id: 'r', type: 'expense', amount: 100, categoryId: 'ghost', accountId: 'ghost', date: '2026-09-21', note: '', recurringId: 'rule', occurrenceDate: '2026-09-21', createdAt: 1, updatedAt: 1 },
+      { id: 'a', type: 'adjustment', amount: 100, accountId: 'ghost', direction: 'increase', date: '2026-09-21', note: '', createdAt: 1, updatedAt: 1 },
+    ]
+    const lines = toCsv(toTransactionViews(rows, CATEGORIES, ACCOUNTS), 'UAH').split('\r\n').slice(1)
+    expect(lines.map((line) => line.split(',').at(-1))).toEqual(['Импорт CSV', 'Регулярная', 'Сверка'])
   })
 
   it('без операций отдаёт только заголовок', () => {

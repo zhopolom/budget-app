@@ -121,12 +121,26 @@ export function migrateBackupV4ToV5(data: RawBackupData): RawBackupData {
   }
 }
 
+/**
+ * v5 → v6: история импорта и правила категорий — новые разделы, пустые у
+ * старых копий. Метаданные источника у операций необязательны: их отсутствие
+ * значит «введено вручную или по расписанию», что выводится на чтении.
+ */
+export function migrateBackupV5ToV6(data: RawBackupData): RawBackupData {
+  return {
+    ...data,
+    importHistory: listOf(data.importHistory),
+    categoryRules: listOf(data.categoryRules),
+  }
+}
+
 /** Цепочка по порядку. Новые шаги добавляются в конец. */
 export const backupMigrations: readonly BackupMigration[] = [
   { from: 1, to: 2, description: 'Лимиты категорий — в отдельный раздел', migrate: migrateBackupV1ToV2 },
   { from: 2, to: 3, description: 'Регулярные переводы', migrate: migrateBackupV2ToV3 },
   { from: 3, to: 4, description: 'Режим подтверждения и ожидающие вхождения', migrate: migrateBackupV3ToV4 },
   { from: 4, to: 5, description: 'Цели накоплений и шаблоны бюджета', migrate: migrateBackupV4ToV5 },
+  { from: 5, to: 6, description: 'История импорта и правила категорий', migrate: migrateBackupV5ToV6 },
 ]
 
 if (import.meta.env.DEV) {

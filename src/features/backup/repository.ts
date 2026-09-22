@@ -19,6 +19,8 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
       db.pendingOccurrences,
       db.savingsGoals,
       db.budgetTemplates,
+      db.importHistory,
+      db.categoryRules,
       db.settings,
     ],
     async (): Promise<BackupData> => {
@@ -32,6 +34,8 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
         pendingOccurrences,
         savingsGoals,
         budgetTemplates,
+        importHistory,
+        categoryRules,
         settings,
       ] = await Promise.all([
         db.accounts.toArray(),
@@ -43,6 +47,8 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
         db.pendingOccurrences.toArray(),
         db.savingsGoals.toArray(),
         db.budgetTemplates.toArray(),
+        db.importHistory.toArray(),
+        db.categoryRules.toArray(),
         settingsRepository.get(),
       ])
 
@@ -56,6 +62,8 @@ export async function createBackup(exportDate: Date, appVersion: string): Promis
         pendingOccurrences,
         savingsGoals,
         budgetTemplates,
+        importHistory,
+        categoryRules,
         settings,
       }
     },
@@ -100,6 +108,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
       db.pendingOccurrences,
       db.savingsGoals,
       db.budgetTemplates,
+      db.importHistory,
+      db.categoryRules,
       db.settings,
     ],
     async (transaction) => {
@@ -113,6 +123,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.pendingOccurrences.clear(),
         db.savingsGoals.clear(),
         db.budgetTemplates.clear(),
+        db.importHistory.clear(),
+        db.categoryRules.clear(),
       ])
 
       await Promise.all([
@@ -125,6 +137,8 @@ export async function restoreBackup(data: BackupData): Promise<RepairSummary> {
         db.pendingOccurrences.bulkAdd(data.pendingOccurrences),
         db.savingsGoals.bulkAdd(data.savingsGoals),
         db.budgetTemplates.bulkAdd(data.budgetTemplates),
+        db.importHistory.bulkAdd(data.importHistory),
+        db.categoryRules.bulkAdd(data.categoryRules),
         db.settings.put({ ...data.settings, id: SETTINGS_ID }),
       ])
 

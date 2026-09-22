@@ -49,6 +49,8 @@ function findDuplicates(data: BackupData): string[] {
   report('pendingOccurrences.id', data.pendingOccurrences.map((item) => item.id))
   report('savingsGoals.id', data.savingsGoals.map((item) => item.id))
   report('budgetTemplates.id', data.budgetTemplates.map((item) => item.id))
+  report('importHistory.id', data.importHistory.map((item) => item.id))
+  report('categoryRules.id', data.categoryRules.map((item) => item.id))
   // Два лимита на одну категорию внутри шаблона применить нельзя однозначно
   for (const template of data.budgetTemplates) {
     report(`budgetTemplates[${template.id}].categoryId`, template.categoryLimits.map((limit) => limit.categoryId))
