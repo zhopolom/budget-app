@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { Button } from '../../components/Button/Button'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { SegmentedControl } from '../../components/SegmentedControl/SegmentedControl'
+import { describeStorage, readAppInfo, type AppInfo } from '../../features/diagnostics/appInfo'
 import { useFps } from '../../features/diagnostics/fps'
 import {
   applyGlassBlur,
@@ -26,6 +27,7 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   const worker = useServiceWorkerStatus()
   const [blur, setBlur] = useState<GlassBlurStep>(currentGlassBlur)
   const journal = useDiagnosticJournal()
+  const info = useAppInfo()
 
   const changeBlur = (step: GlassBlurStep) => {
     setBlur(step)
@@ -35,6 +37,35 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
   return (
     <section className={styles.panel} aria-label="Диагностика">
       <h2 className={styles.title}>Диагностика</h2>
+
+      <ListCard label="Приложение">
+        <ListItem>
+          <ListRow icon="🏷️" title="Версия приложения" value={info?.appVersion ?? '…'} />
+        </ListItem>
+        <ListItem>
+          <ListRow icon="🗄️" title="База данных" subtitle={info?.lastMigration} value={info ? `v${info.dbVersion}` : '…'} />
+        </ListItem>
+        <ListItem>
+          <ListRow icon="💾" title="Формат копии" value={info ? `v${info.backupSchemaVersion}` : '…'} />
+        </ListItem>
+        <ListItem>
+          <ListRow icon="📱" title="Режим" value={info ? (info.pwaMode === 'standalone' ? 'PWA' : 'браузер') : '…'} />
+        </ListItem>
+        <ListItem>
+          <ListRow icon="📦" title="Хранилище" subtitle={info ? describeStorage(info.storage) : undefined} />
+        </ListItem>
+        <ListItem>
+          <ListRow
+            icon="🧾"
+            title="Записи"
+            subtitle={
+              info
+                ? `операций ${info.counts.transactions} · счетов ${info.counts.accounts} · категорий ${info.counts.categories} · расписаний ${info.counts.recurring} · ожидают ${info.counts.pending} · целей ${info.counts.goals} · шаблонов ${info.counts.templates} · правил ${info.counts.rules} · импортов ${info.counts.imports}`
+                : undefined
+            }
+          />
+        </ListItem>
+      </ListCard>
 
       <ListCard label="Показатели">
         <ListItem>
@@ -82,6 +113,23 @@ export default function DiagnosticsPanel({ onClose }: { onClose: () => void }) {
       </Button>
     </section>
   )
+}
+
+/** Версии и счётчики читаются один раз при открытии панели: они не меняются, пока она открыта. */
+function useAppInfo(): AppInfo | undefined {
+  const [info, setInfo] = useState<AppInfo | undefined>(undefined)
+  useEffect(() => {
+    let cancelled = false
+    readAppInfo(__APP_VERSION__)
+      .then((next) => {
+        if (!cancelled) setInfo(next)
+      })
+      .catch(() => undefined)
+    return () => {
+      cancelled = true
+    }
+  }, [])
+  return info
 }
 
 interface ViewportReadout {

@@ -5,6 +5,7 @@ import { useApplyTheme } from '../features/settings/theme'
 import { useSettings } from '../features/settings/useSettings'
 import { useKeyboardInset } from '../hooks/useKeyboardInset'
 import { useToday } from '../hooks/useToday'
+import { ErrorBoundary } from './ErrorBoundary'
 import { AppRouter } from './router'
 import { UpdatePrompt } from './UpdatePrompt'
 
@@ -17,7 +18,9 @@ export function App() {
     <ToastProvider>
       <ConfirmProvider>
         <RecurringRunner />
-        <AppRouter />
+        <ErrorBoundary>
+          <AppRouter />
+        </ErrorBoundary>
         <UpdatePrompt />
       </ConfirmProvider>
     </ToastProvider>

@@ -68,7 +68,7 @@ const AMOUNT_MODE_OPTIONS = [
 
 const NONE = '__none__'
 
-const bytesLabel = (bytes: number) => `${Math.round(bytes / 1024)} КБ`
+const bytesLabel = (bytes: number) => (bytes >= 1024 * 1024 ? `${Math.round(bytes / 1024 / 1024)} МБ` : `${Math.round(bytes / 1024)} КБ`)
 
 export function ImportPage() {
   const today = useToday()
