@@ -72,3 +72,29 @@
   line-height: 1.4;
   color: var(--ink-2);
 }
+
+.preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.previewText {
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.previewActions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* Подпись под кнопкой: что именно сделает этот вариант */
+.previewHint {
+  margin-bottom: 8px;
+  padding: 0 4px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}

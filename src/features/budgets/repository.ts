@@ -41,8 +41,11 @@ export const categoryBudgetsRepository = {
     return db.categoryBudgets.toArray()
   },
 
-  /** limitAmount = 0 убирает лимит категории на этот месяц. */
-  async set(ym: YearMonth, categoryId: Id, limitAmount: MinorUnits): Promise<void> {
+  /**
+   * limitAmount = 0 убирает лимит категории на этот месяц.
+   * options.rollover — переносить ли остаток (ТЗ §37); не передан — флаг не меняется.
+   */
+  async set(ym: YearMonth, categoryId: Id, limitAmount: MinorUnits, options: { rollover?: boolean } = {}): Promise<void> {
     assertLimit(limitAmount)
     const id = categoryBudgetIdFor(ym, categoryId)
     if (limitAmount <= 0) {
@@ -52,12 +55,15 @@ export const categoryBudgetsRepository = {
 
     const now = Date.now()
     const existing = await db.categoryBudgets.get(id)
+    const rollover = options.rollover ?? existing?.rollover ?? false
     await db.categoryBudgets.put({
       id,
       categoryId,
       year: ym.year,
       month: ym.month,
       limitAmount,
+      // Флаг храним только включённым: у лимитов до 0.5 его нет, и это то же самое, что false
+      ...(rollover ? { rollover: true } : {}),
       createdAt: existing?.createdAt ?? now,
       updatedAt: now,
     })
@@ -66,36 +72,5 @@ export const categoryBudgetsRepository = {
   /** Все лимиты категории — нужно при её удалении. */
   removeByCategory(categoryId: Id): Promise<number> {
     return db.categoryBudgets.where('categoryId').equals(categoryId).delete()
-  },
-
-  /**
-   * Копирует лимиты предыдущего месяца в целевой. Уже заданные лимиты
-   * не трогает, поэтому повторный вызов ничего не портит.
-   * Возвращает число созданных лимитов.
-   */
-  async copyFrom(source: YearMonth, target: YearMonth): Promise<number> {
-    return db.transaction('rw', db.categoryBudgets, async () => {
-      const [from, to] = await Promise.all([
-        categoryBudgetsRepository.listForMonth(source),
-        categoryBudgetsRepository.listForMonth(target),
-      ])
-      const taken = new Set(to.map((item) => item.categoryId))
-      const now = Date.now()
-
-      const created = from
-        .filter((item) => !taken.has(item.categoryId))
-        .map((item) => ({
-          id: categoryBudgetIdFor(target, item.categoryId),
-          categoryId: item.categoryId,
-          year: target.year,
-          month: target.month,
-          limitAmount: item.limitAmount,
-          createdAt: now,
-          updatedAt: now,
-        }))
-
-      if (created.length > 0) await db.categoryBudgets.bulkPut(created)
-      return created.length
-    })
   },
 }

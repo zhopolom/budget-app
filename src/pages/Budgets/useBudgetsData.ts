@@ -1,11 +1,14 @@
 import { useLiveQuery } from 'dexie-react-hooks'
 import { db } from '../../db/database'
+import type { BudgetSnapshot } from '../../features/budgets/apply'
 import { budgetsRepository, categoryBudgetsRepository } from '../../features/budgets/repository'
+import { snapshotOfMonth, templatesRepository } from '../../features/budgets/templatesRepository'
 import { categoriesRepository } from '../../features/categories/repository'
 import { settingsRepository } from '../../features/settings/repository'
 import { calculateCategoryTotals } from '../../features/transactions/calculations'
 import { transactionsRepository } from '../../features/transactions/repository'
-import type { Category, CurrencyCode, Id, MinorUnits } from '../../types/entities'
+import type { BudgetTemplate, Category, CurrencyCode, Id, MinorUnits } from '../../types/entities'
+import { isSnapshotEmpty } from '../../features/budgets/apply'
 import { monthDateRange, monthKey, previousMonth, type YearMonth } from '../../utils/dates'
 
 export interface CategoryLimitRow {
@@ -23,8 +26,12 @@ export interface BudgetsData {
   rows: CategoryLimitRow[]
   /** Сумма заданных лимитов категорий. */
   limitsTotal: MinorUnits
-  /** Сколько лимитов можно перенести из прошлого месяца. */
-  copyableFromPrevious: number
+  categories: Category[]
+  /** Бюджет этого месяца одним снимком — для превью применения шаблона. */
+  current: BudgetSnapshot
+  /** Бюджет прошлого месяца; null — там пусто, копировать нечего. */
+  previous: BudgetSnapshot | null
+  templates: BudgetTemplate[]
 }
 
 async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
@@ -32,15 +39,17 @@ async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
 
   return db.transaction(
     'r',
-    [db.settings, db.categories, db.transactions, db.budgets, db.categoryBudgets],
+    [db.settings, db.categories, db.transactions, db.budgets, db.categoryBudgets, db.budgetTemplates],
     async () => {
-      const [settings, categories, monthTransactions, budget, limits, previousLimits] = await Promise.all([
+      const [settings, categories, monthTransactions, budget, limits, current, previous, templates] = await Promise.all([
         settingsRepository.get(),
         categoriesRepository.listAll(),
         transactionsRepository.listByDateRange(start, end),
         budgetsRepository.getForMonth(month),
         categoryBudgetsRepository.listForMonth(month),
-        categoryBudgetsRepository.listForMonth(previousMonth(month)),
+        snapshotOfMonth(month),
+        snapshotOfMonth(previousMonth(month)),
+        templatesRepository.listAll(),
       ])
 
       const spent = calculateCategoryTotals(monthTransactions)
@@ -55,18 +64,16 @@ async function loadBudgetsData(month: YearMonth): Promise<BudgetsData> {
           spent: spent.get(category.id) ?? 0,
         }))
 
-      const taken = new Set(limits.map((item) => item.categoryId))
-      const known = new Set(categories.map((category) => category.id))
-
       return {
         currency: settings.baseCurrency,
         totalLimit: budget?.totalLimit ?? 0,
         monthExpense: [...spent.values()].reduce((sum, value) => sum + value, 0),
         rows,
         limitsTotal: limits.reduce((sum, item) => sum + item.limitAmount, 0),
-        copyableFromPrevious: previousLimits.filter(
-          (item) => !taken.has(item.categoryId) && known.has(item.categoryId),
-        ).length,
+        categories,
+        current,
+        previous: isSnapshotEmpty(previous) ? null : previous,
+        templates,
       }
     },
   )

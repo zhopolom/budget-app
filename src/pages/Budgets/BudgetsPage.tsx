@@ -1,31 +1,59 @@
 import { useState } from 'react'
 import { useSelectedMonth } from '../../app/selectedMonth'
 import { Button } from '../../components/Button/Button'
+import { useConfirm } from '../../components/Confirm/confirmContext'
 import { ListCard, ListItem, ListRow } from '../../components/ListRow/ListRow'
 import { MonthSelector } from '../../components/MonthSelector/MonthSelector'
 import { PageHeader } from '../../components/PageHeader/PageHeader'
+import { Sheet } from '../../components/Sheet/Sheet'
 import { useToast } from '../../components/Toast/toastContext'
+import {
+  describePlan,
+  isSnapshotEmpty,
+  planApplication,
+  type ApplyMode,
+  type BudgetSnapshot,
+} from '../../features/budgets/apply'
 import { budgetsRepository, categoryBudgetsRepository } from '../../features/budgets/repository'
+import { templatesRepository } from '../../features/budgets/templatesRepository'
 import { useToday } from '../../hooks/useToday'
-import type { Id, MinorUnits } from '../../types/entities'
+import type { BudgetTemplate, Id, MinorUnits } from '../../types/entities'
 import { formatMonthGenitive, previousMonth } from '../../utils/dates'
 import { Money } from '../../utils/money'
 import { pluralRu } from '../../utils/plural'
 import { AmountSheet } from './AmountSheet'
 import styles from './BudgetsPage.module.css'
+import { TemplateNameSheet, TemplateSheet } from './TemplateSheets'
 import { useBudgetsData, type CategoryLimitRow } from './useBudgetsData'
 
 type Editing = { kind: 'total' } | { kind: 'category'; categoryId: Id } | null
+
+/** Откуда применяем бюджет: шаблон или прошлый месяц. */
+type ApplySource = { kind: 'template'; template: BudgetTemplate } | { kind: 'previous' }
+
+function snapshotOf(source: ApplySource, previous: BudgetSnapshot | null): BudgetSnapshot | null {
+  if (source.kind === 'previous') return previous
+  return { totalLimit: source.template.totalLimit, categoryLimits: source.template.categoryLimits }
+}
+
+function sourceTitle(source: ApplySource, monthGenitive: string): string {
+  return source.kind === 'previous' ? `Бюджет ${monthGenitive}` : `Шаблон «${source.template.name}»`
+}
 
 export function BudgetsPage() {
   const today = useToday()
   const selection = useSelectedMonth(today)
   const data = useBudgetsData(selection.month)
   const [editing, setEditing] = useState<Editing>(null)
+  const [openTemplate, setOpenTemplate] = useState<BudgetTemplate | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [applying, setApplying] = useState<ApplySource | null>(null)
   const toast = useToast()
+  const confirm = useConfirm()
 
   const month = selection.month
   const editingRow = editing?.kind === 'category' ? data?.rows.find((row) => row.category.id === editing.categoryId) : undefined
+  const knownCategories = new Set(data?.categories.map((category) => category.id) ?? [])
 
   const saveTotal = async (value: MinorUnits) => {
     await budgetsRepository.setForMonth(month, value)
@@ -37,14 +65,49 @@ export function BudgetsPage() {
     toast.show(value > 0 ? 'Лимит сохранён' : 'Лимит убран')
   }
 
-  const copyPrevious = async () => {
-    const copied = await categoryBudgetsRepository.copyFrom(previousMonth(month), month)
-    toast.show(
-      copied > 0
-        ? `Перенесено ${copied} ${pluralRu(copied, ['лимит', 'лимита', 'лимитов'])}`
-        : 'Переносить нечего',
-    )
+  const runApply = async (source: ApplySource, mode: ApplyMode) => {
+    try {
+      const plan =
+        source.kind === 'template'
+          ? await templatesRepository.applyToMonth(source.template.id, month, mode)
+          : await templatesRepository.copyMonth(previousMonth(month), month, mode)
+      setApplying(null)
+      setOpenTemplate(null)
+      const text = describePlan(plan, data?.currency ?? 'UAH')
+      toast.show(text === '' ? 'Ничего не изменилось' : `${text}.`)
+    } catch (error) {
+      toast.show(error instanceof Error ? error.message : 'Не удалось применить', { tone: 'error' })
+    }
   }
+
+  /** Пустой месяц заполняется сразу; если бюджет уже есть — сначала превью (ТЗ §36). */
+  const startApply = (source: ApplySource) => {
+    if (!data) return
+    if (isSnapshotEmpty(data.current)) void runApply(source, 'replace')
+    else setApplying(source)
+  }
+
+  const saveTemplate = async (name: string) => {
+    await templatesRepository.createFromMonth(name, month)
+    toast.show(`Шаблон «${name.trim()}» сохранён`)
+  }
+
+  const removeTemplate = async (template: BudgetTemplate) => {
+    const confirmed = await confirm({
+      title: 'Удалить шаблон?',
+      message: `«${template.name}» исчезнет из списка. Бюджеты месяцев, к которым он применялся, останутся.`,
+      confirmLabel: 'Удалить',
+      tone: 'danger',
+    })
+    if (!confirmed) return
+    await templatesRepository.remove(template.id)
+    setOpenTemplate(null)
+    toast.show('Шаблон удалён')
+  }
+
+  const applyingSnapshot = applying && data ? snapshotOf(applying, data.previous) : null
+  const mergePlan = applyingSnapshot && data ? planApplication(applyingSnapshot, data.current, 'merge', knownCategories) : null
+  const replacePlan = applyingSnapshot && data ? planApplication(applyingSnapshot, data.current, 'replace', knownCategories) : null
 
   return (
     <div className={styles.page}>
@@ -80,9 +143,9 @@ export function BudgetsPage() {
               Сумма лимитов не обязана совпадать с общим бюджетом — это отдельные ограничения.
             </p>
 
-            {data.copyableFromPrevious > 0 && (
-              <Button variant="secondary" block onClick={() => void copyPrevious()}>
-                Перенести лимиты за {formatMonthGenitive(previousMonth(month))}
+            {data.previous && (
+              <Button variant="secondary" block onClick={() => startApply({ kind: 'previous' })}>
+                Скопировать бюджет за {formatMonthGenitive(previousMonth(month))}
               </Button>
             )}
 
@@ -99,12 +162,82 @@ export function BudgetsPage() {
                 </ListItem>
               ))}
             </ListCard>
+
+            {!isSnapshotEmpty(data.current) && (
+              <Button variant="secondary" block onClick={() => setSaving(true)}>
+                Сохранить как шаблон
+              </Button>
+            )}
+          </section>
+
+          <section className={styles.section} aria-label="Шаблоны бюджета">
+            <div className={styles.sectionHead}>
+              <h2 className={styles.sectionTitle}>Шаблоны</h2>
+            </div>
+            <p className={styles.note}>
+              Шаблон запоминает общий бюджет и лимиты категорий, чтобы применять их к любому месяцу одним нажатием.
+            </p>
+            {data.templates.length > 0 && (
+              <ListCard label="Шаблоны бюджета">
+                {data.templates.map((template) => (
+                  <ListItem key={template.id}>
+                    <ListRow
+                      icon="📋"
+                      title={template.name}
+                      subtitle={templateSubtitle(template, data.currency)}
+                      chevron
+                      onClick={() => setOpenTemplate(template)}
+                    />
+                  </ListItem>
+                ))}
+              </ListCard>
+            )}
           </section>
         </>
       )}
 
       {data && (
         <>
+          <TemplateSheet
+            template={openTemplate}
+            categories={data.categories}
+            currency={data.currency}
+            monthGenitive={formatMonthGenitive(month)}
+            onApply={(template) => startApply({ kind: 'template', template })}
+            onRemove={(template) => void removeTemplate(template)}
+            onClose={() => setOpenTemplate(null)}
+          />
+
+          <TemplateNameSheet open={saving} onSave={saveTemplate} onClose={() => setSaving(false)} />
+
+          <Sheet
+            open={applying !== null}
+            onClose={() => setApplying(null)}
+            title={`Применить к ${formatMonthGenitive(month)}`}
+          >
+            {applying && mergePlan && replacePlan && (
+              <div className={styles.preview}>
+                <p className={styles.previewText}>
+                  В {formatMonthGenitive(month)} бюджет уже задан: {describeSnapshot(data.current, data.currency)}.{' '}
+                  {sourceTitle(applying, formatMonthGenitive(previousMonth(month)))} можно добавить к нему или поставить вместо него.
+                </p>
+                <div className={styles.previewActions}>
+                  <Button block onClick={() => void runApply(applying, 'merge')}>
+                    Дополнить
+                  </Button>
+                  <p className={styles.previewHint}>{describePlan(mergePlan, data.currency) || 'Ничего не изменится'}</p>
+                  <Button variant="secondary" block onClick={() => void runApply(applying, 'replace')}>
+                    Заменить
+                  </Button>
+                  <p className={styles.previewHint}>{describePlan(replacePlan, data.currency) || 'Ничего не изменится'}</p>
+                  <Button variant="ghost" block onClick={() => setApplying(null)}>
+                    Отмена
+                  </Button>
+                </div>
+              </div>
+            )}
+          </Sheet>
+
           <AmountSheet
             open={editing?.kind === 'total'}
             title={`Бюджет ${formatMonthGenitive(month)}`}
@@ -136,6 +269,24 @@ export function BudgetsPage() {
       )}
     </div>
   )
+}
+
+/** «Общий 20 000 ₴ · 4 лимита» */
+function templateSubtitle(template: BudgetTemplate, currency: Parameters<typeof Money.format>[1]): string {
+  const parts: string[] = []
+  if (template.totalLimit > 0) parts.push(`Общий ${Money.format(template.totalLimit, currency)}`)
+  const count = template.categoryLimits.length
+  if (count > 0) parts.push(`${count} ${pluralRu(count, ['лимит', 'лимита', 'лимитов'])}`)
+  return parts.join(' · ')
+}
+
+/** «общий 15 000 ₴ и 3 лимита» — что уже есть в месяце. */
+function describeSnapshot(snapshot: BudgetSnapshot, currency: Parameters<typeof Money.format>[1]): string {
+  const parts: string[] = []
+  if (snapshot.totalLimit > 0) parts.push(`общий ${Money.format(snapshot.totalLimit, currency)}`)
+  const count = snapshot.categoryLimits.length
+  if (count > 0) parts.push(`${count} ${pluralRu(count, ['лимит', 'лимита', 'лимитов'])}`)
+  return parts.join(' и ')
 }
 
 function subtitleFor(row: CategoryLimitRow, currency: Parameters<typeof Money.format>[1]): string | undefined {
