@@ -3,10 +3,12 @@ import { createDefaultCategories, SYSTEM_CATEGORY_IDS } from '../features/catego
 import type {
   Account,
   AppSettings,
+  BudgetTemplate,
   Category,
   Id,
   PendingOccurrence,
   RecurringTransaction,
+  SavingsGoal,
   Transaction,
 } from '../types/entities'
 
@@ -41,6 +43,10 @@ export interface RepairSummary {
   systemCategories: number
   /** Ожидающие вхождения, чьё расписание удалено: подтверждать их нечем. */
   orphanOccurrences: number
+  /** Цели, чей накопительный счёт удалён: остаются без счёта. */
+  goals: number
+  /** Лимиты шаблонов на удалённые категории: сняты. */
+  templateLimits: number
 }
 
 type Record = Transaction | RecurringTransaction
@@ -118,6 +124,38 @@ async function removeOrphanOccurrences(tx: DexieTransaction, rules: ReadonlySet<
   return orphans.length
 }
 
+/**
+ * Цель, чей счёт удалён (0.5): остаётся без счёта. Остаток удалённого счёта
+ * неизвестен, поэтому накопленное — то, что уже было записано вручную, или ноль.
+ * Саму цель не трогаем: удалять её за пользователя нельзя.
+ */
+async function unlinkOrphanGoals(tx: DexieTransaction, accounts: ReadonlySet<Id>, now: number): Promise<number> {
+  const table = tx.table('savingsGoals')
+  const goals = (await table.toArray()) as SavingsGoal[]
+  let fixed = 0
+  for (const goal of goals) {
+    if (goal.linkedAccountId === undefined || accounts.has(goal.linkedAccountId)) continue
+    const { linkedAccountId: _dropped, ...rest } = goal
+    await table.put({ ...rest, currentAmount: goal.currentAmount ?? 0, updatedAt: now } satisfies SavingsGoal)
+    fixed += 1
+  }
+  return fixed
+}
+
+/** Лимит шаблона на удалённую категорию применить некуда — снимаем строку, шаблон остаётся. */
+async function dropOrphanTemplateLimits(tx: DexieTransaction, categories: ReadonlySet<Id>, now: number): Promise<number> {
+  const table = tx.table('budgetTemplates')
+  const templates = (await table.toArray()) as BudgetTemplate[]
+  let dropped = 0
+  for (const template of templates) {
+    const kept = template.categoryLimits.filter((limit) => categories.has(limit.categoryId))
+    if (kept.length === template.categoryLimits.length) continue
+    dropped += template.categoryLimits.length - kept.length
+    await table.put({ ...template, categoryLimits: kept, updatedAt: now } satisfies BudgetTemplate)
+  }
+  return dropped
+}
+
 export async function repairDanglingReferences(tx: DexieTransaction): Promise<RepairSummary> {
   const [accounts, categories, transactions, rules] = await Promise.all([
     tx.table('accounts').toArray() as Promise<Account[]>,
@@ -138,6 +176,8 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
     createdRecoveredAccount: false,
     systemCategories: 0,
     orphanOccurrences: 0,
+    goals: 0,
+    templateLimits: 0,
   }
 
   // Сначала категории: без «Другого» чинить битые категории было бы нечем
@@ -192,6 +232,13 @@ export async function repairDanglingReferences(tx: DexieTransaction): Promise<Re
   // настоящую транзакцию IndexedDB, а не на список таблиц, который знает Dexie
   if (tx.idbtrans.objectStoreNames.contains('pendingOccurrences')) {
     summary.orphanOccurrences = await removeOrphanOccurrences(tx, new Set(rules.map((rule) => rule.id)))
+  }
+  // Таблицы v5 — тем же способом: миграции v3 и v4 их ещё не видят
+  if (tx.idbtrans.objectStoreNames.contains('savingsGoals')) {
+    summary.goals = await unlinkOrphanGoals(tx, accountIds, now)
+  }
+  if (tx.idbtrans.objectStoreNames.contains('budgetTemplates')) {
+    summary.templateLimits = await dropOrphanTemplateLimits(tx, categoryIds, now)
   }
 
   return summary

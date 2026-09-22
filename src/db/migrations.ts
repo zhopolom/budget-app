@@ -2,7 +2,7 @@ import type { Transaction as DexieTransaction } from 'dexie'
 import { categoryBudgetIdFor } from '../features/budgets/ids'
 import type { Budget, CategoryBudget, RecurringTransaction } from '../types/entities'
 import { repairDanglingReferences } from './repair'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4, SCHEMA_V5 } from './schema'
 
 export interface Migration {
   version: number
@@ -121,6 +121,13 @@ export const migrations: readonly Migration[] = [
      * то есть ровно то поведение, которое у них было. Новая таблица пуста.
      */
     upgrade: markAutomaticExecution,
+  },
+  {
+    version: 5,
+    description: 'Цели накоплений и шаблоны бюджета',
+    stores: SCHEMA_V5,
+    // Только новые таблицы: у существующих записей ничего не меняется.
+    // Флаг rollover у лимитов категорий — необязательное поле без индекса
   },
 ]
 

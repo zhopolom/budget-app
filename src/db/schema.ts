@@ -59,3 +59,15 @@ export const SCHEMA_V3 = {
 export const SCHEMA_V4 = {
   pendingOccurrences: 'id, &[recurringId+scheduledDate], recurringId, status, scheduledDate',
 } as const satisfies Record<string, string>
+
+/**
+ * v5 — цели накоплений и шаблоны бюджета.
+ *
+ * savingsGoals: linkedAccountId индексируем ради удаления счёта — цели
+ * находятся запросом, а не перебором. isArchived не индексируем: булевы ключи
+ * IndexedDB не умеет, а таблица маленькая.
+ */
+export const SCHEMA_V5 = {
+  savingsGoals: 'id, linkedAccountId, createdAt',
+  budgetTemplates: 'id, createdAt',
+} as const satisfies Record<string, string>

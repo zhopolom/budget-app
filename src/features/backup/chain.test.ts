@@ -94,7 +94,7 @@ beforeEach(resetTestDatabase)
 describe('цепочки копий до текущей версии', () => {
   it('свежая установка сразу на последней схеме', () => {
     expect(db.verno).toBe(DB_VERSION)
-    expect(DB_VERSION).toBe(4)
+    expect(DB_VERSION).toBe(5)
     expect(BACKUP_SCHEMA_VERSION).toBe(4)
   })
 

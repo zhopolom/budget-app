@@ -140,6 +140,48 @@ export interface CategoryBudget {
   month: number
   year: number
   limitAmount: MinorUnits
+  /**
+   * Переносить неизрасходованный остаток на следующий месяц (0.5). Отсутствует —
+   * нет. Сам перенос не хранится: он считается из лимита и трат прошлого месяца.
+   */
+  rollover?: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+/**
+ * Цель накопления (0.5). Прогресс не хранится, если его можно посчитать:
+ * у цели со счётом это остаток счёта, и только у цели без счёта — currentAmount.
+ */
+export interface SavingsGoal {
+  id: Id
+  name: string
+  /** Эмодзи. */
+  icon: string
+  targetAmount: MinorUnits
+  /** Накоплено вручную. Только у цели без счёта. */
+  currentAmount?: MinorUnits
+  /** Срок, включительно. Отсутствует — без срока. */
+  targetDate?: IsoDate
+  /** Накопительный счёт, остаток которого и есть прогресс. */
+  linkedAccountId?: Id
+  isArchived: boolean
+  createdAt: Timestamp
+  updatedAt: Timestamp
+}
+
+export interface BudgetTemplateLimit {
+  categoryId: Id
+  limitAmount: MinorUnits
+}
+
+/** Шаблон бюджета (0.5): общий лимит и лимиты категорий, которые применяются к месяцу. */
+export interface BudgetTemplate {
+  id: Id
+  name: string
+  /** 0 — общий лимит шаблон не задаёт. */
+  totalLimit: MinorUnits
+  categoryLimits: BudgetTemplateLimit[]
   createdAt: Timestamp
   updatedAt: Timestamp
 }

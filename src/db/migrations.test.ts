@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from 'vitest'
 import type { Account, Budget, Category, EntryTransaction } from '../types/entities'
 import { Money } from '../utils/money'
 import { BudgetDatabase, db, DB_NAME, DB_VERSION } from './database'
-import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3 } from './schema'
+import { SCHEMA_V1, SCHEMA_V2, SCHEMA_V3, SCHEMA_V4 } from './schema'
 
 /**
  * Проверяем реальный путь обновления: база версии 1 с данными пользователя
@@ -99,8 +99,8 @@ describe('миграция v1 → v2', () => {
     await writeV1Database()
     const upgraded = await openUpgraded()
 
-    expect(DB_VERSION).toBe(4)
-    expect(upgraded.verno).toBe(4)
+    expect(DB_VERSION).toBe(5)
+    expect(upgraded.verno).toBe(5)
     upgraded.close()
   })
 
@@ -212,7 +212,7 @@ describe('миграция v3 → v4', () => {
     await writeV3Database([V3_RULE])
     const upgraded = await openUpgraded()
 
-    expect(upgraded.verno).toBe(4)
+    expect(upgraded.verno).toBe(DB_VERSION)
     const rule = await upgraded.recurringTransactions.get(V3_RULE.id)
     expect(rule).toEqual({ ...V3_RULE, executionMode: 'automatic' })
     expect(await upgraded.pendingOccurrences.count()).toBe(0)
@@ -238,5 +238,57 @@ describe('миграция v3 → v4', () => {
     const second = await openUpgraded()
     expect(await second.recurringTransactions.toArray()).toEqual(snapshot)
     second.close()
+  })
+})
+
+/** База v4: расписания с режимом и ожидающее вхождение, таблиц целей и шаблонов ещё нет. */
+async function writeV4Database(): Promise<void> {
+  const legacy = new Dexie(DB_NAME)
+  legacy.version(1).stores(SCHEMA_V1)
+  legacy.version(2).stores(SCHEMA_V2)
+  legacy.version(3).stores(SCHEMA_V3)
+  legacy.version(4).stores(SCHEMA_V4)
+  await legacy.open()
+  await Promise.all([
+    legacy.table('accounts').add(V1_ACCOUNT),
+    legacy.table('categories').add(V1_CATEGORY),
+    legacy.table('transactions').bulkAdd(V1_TRANSACTIONS),
+    legacy.table('recurringTransactions').add({ ...V3_RULE, executionMode: 'confirm' }),
+    legacy.table('pendingOccurrences').add({
+      id: 'p-1',
+      recurringId: V3_RULE.id,
+      scheduledDate: '2026-09-14',
+      status: 'pending',
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+    legacy.table('categoryBudgets').add({
+      id: '2026-08:cat-exp-groceries',
+      categoryId: V1_CATEGORY.id,
+      year: 2026,
+      month: 8,
+      limitAmount: Money.fromMajor(5_000),
+      createdAt: 1,
+      updatedAt: 1,
+    }),
+    legacy.table('settings').add({ id: 'app', baseCurrency: 'UAH', theme: 'system', lastAccountId: V1_ACCOUNT.id }),
+  ])
+  legacy.close()
+}
+
+describe('миграция v4 → v5', () => {
+  it('заводит пустые таблицы целей и шаблонов, не трогая остальное', async () => {
+    await writeV4Database()
+    const upgraded = await openUpgraded()
+
+    expect(upgraded.verno).toBe(5)
+    expect(await upgraded.savingsGoals.count()).toBe(0)
+    expect(await upgraded.budgetTemplates.count()).toBe(0)
+    expect((await upgraded.transactions.toArray()).sort((a, b) => a.id.localeCompare(b.id))).toEqual(V1_TRANSACTIONS)
+    expect((await upgraded.recurringTransactions.get(V3_RULE.id))?.executionMode).toBe('confirm')
+    expect((await upgraded.pendingOccurrences.get('p-1'))?.status).toBe('pending')
+    // Лимит без флага rollover читается как лимит без переноса
+    expect((await upgraded.categoryBudgets.get('2026-08:cat-exp-groceries'))?.rollover).toBeUndefined()
+    upgraded.close()
   })
 })

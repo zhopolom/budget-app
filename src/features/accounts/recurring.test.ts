@@ -80,8 +80,8 @@ describe('countUsage', () => {
     })
     await addRule(cash)
 
-    expect(await accountsRepository.countUsage(cash)).toEqual({ transactions: 1, recurring: 1 })
-    expect(await accountsRepository.countUsage(card)).toEqual({ transactions: 0, recurring: 0 })
+    expect(await accountsRepository.countUsage(cash)).toEqual({ transactions: 1, recurring: 1, goals: 0 })
+    expect(await accountsRepository.countUsage(card)).toEqual({ transactions: 0, recurring: 0, goals: 0 })
   })
 
   it('регулярный перевод считается у обоих счетов', async () => {

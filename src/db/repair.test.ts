@@ -231,6 +231,8 @@ describe('повторный ремонт', () => {
       createdRecoveredAccount: false,
       systemCategories: 0,
       orphanOccurrences: 0,
+      goals: 0,
+      templateLimits: 0,
     })
     expect(await upgraded.accounts.toArray()).toEqual(before.accounts)
     expect(await upgraded.transactions.toArray()).toEqual(before.transactions)
