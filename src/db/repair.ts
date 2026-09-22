@@ -78,7 +78,7 @@ function repairRecord<T extends Record>(
 
   // У перевода категории нет; у расхода и дохода мёртвая категория ломает
   // и списки, и лимиты, и аналитику — подставляем «Другое» того же типа
-  if (record.type !== 'transfer' && !categories.has(record.categoryId)) {
+  if ((record.type === 'expense' || record.type === 'income') && !categories.has(record.categoryId)) {
     const fallback = record.type === 'expense' ? SYSTEM_CATEGORY_IDS.expenseOther : SYSTEM_CATEGORY_IDS.incomeOther
     if (categories.has(fallback)) {
       record = { ...record, categoryId: fallback, updatedAt: now }

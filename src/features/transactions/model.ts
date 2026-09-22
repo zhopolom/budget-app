@@ -1,4 +1,5 @@
 import type {
+  AdjustmentTransaction,
   EntryTransaction,
   Id,
   MinorUnits,
@@ -19,10 +20,14 @@ export function isTransfer(transaction: Transaction): transaction is TransferTra
 }
 
 export function isEntry(transaction: Transaction): transaction is EntryTransaction {
-  return transaction.type !== 'transfer'
+  return transaction.type === 'expense' || transaction.type === 'income'
 }
 
-/** Счета, которых касается операция: один у расхода/дохода, два у перевода. */
+export function isAdjustment(transaction: Transaction): transaction is AdjustmentTransaction {
+  return transaction.type === 'adjustment'
+}
+
+/** Счета, которых касается операция: один у расхода, дохода и корректировки, два у перевода. */
 export function accountIdsOf(transaction: Transaction): Id[] {
   return isTransfer(transaction)
     ? [transaction.fromAccountId, transaction.toAccountId]
@@ -35,7 +40,12 @@ export function touchesAccount(transaction: Transaction, accountId: Id): boolean
 
 /** Категория операции: у перевода её нет. */
 export function categoryIdOf(transaction: Transaction): Id | null {
-  return isTransfer(transaction) ? null : transaction.categoryId
+  return isEntry(transaction) ? transaction.categoryId : null
+}
+
+/** Знак корректировки: сверка нашла больше — плюс, меньше — минус. */
+export function adjustmentDelta(transaction: AdjustmentTransaction): MinorUnits {
+  return transaction.direction === 'increase' ? transaction.amount : -transaction.amount
 }
 
 /**
@@ -50,6 +60,7 @@ export function balanceDelta(transaction: Transaction, accountId: Id): MinorUnit
     return delta
   }
   if (transaction.accountId !== accountId) return 0
+  if (isAdjustment(transaction)) return adjustmentDelta(transaction)
   return transaction.type === 'expense' ? -transaction.amount : transaction.amount
 }
 
@@ -57,3 +68,4 @@ export function balanceDelta(transaction: Transaction, accountId: Id): MinorUnit
 export type TransactionInput =
   | Omit<EntryTransaction, 'id' | 'createdAt' | 'updatedAt'>
   | Omit<TransferTransaction, 'id' | 'createdAt' | 'updatedAt'>
+  | Omit<AdjustmentTransaction, 'id' | 'createdAt' | 'updatedAt'>

@@ -81,6 +81,10 @@ export function AccountPage() {
             <Tile label="Расходы" value={data.activity.expense} currency={data.currency} />
             <Tile label="Пришло переводом" value={data.activity.transferIn} currency={data.currency} />
             <Tile label="Ушло переводом" value={data.activity.transferOut} currency={data.currency} />
+            {/* Корректировки редки — плитка появляется, только когда сверка что-то нашла */}
+            {data.activity.adjustment !== 0 && (
+              <Tile label="Корректировки" value={data.activity.adjustment} currency={data.currency} signed />
+            )}
           </section>
 
           {groups.length === 0 ? (
@@ -146,17 +150,20 @@ function Tile({
   value,
   currency,
   tone,
+  signed = false,
 }: {
   label: string
   value: MinorUnits
   currency: Parameters<typeof Money.format>[1]
   tone?: 'positive'
+  /** Показывать знак: у корректировок он и есть смысл. */
+  signed?: boolean
 }) {
   return (
     <div className={styles.tile}>
       <p className={styles.tileLabel}>{label}</p>
       <p className={styles.tileValue} data-tone={value > 0 ? tone : undefined} data-zero={value === 0 || undefined}>
-        {Money.format(value, currency)}
+        {Money.format(value, currency, { sign: signed ? 'always' : 'auto' })}
       </p>
     </div>
   )

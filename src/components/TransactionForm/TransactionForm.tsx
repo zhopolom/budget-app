@@ -9,7 +9,7 @@ import {
   validateTransactionDraft,
   type TransactionDraft,
 } from '../../features/transactions/validation'
-import type { Id, TransactionType } from '../../types/entities'
+import type { Id, ManualTransactionType } from '../../types/entities'
 import { toIsoDate } from '../../utils/dates'
 import { AmountInput } from '../AmountInput/AmountInput'
 import { Button } from '../Button/Button'
@@ -24,7 +24,7 @@ const TYPE_OPTIONS = [
   { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
   { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
-] as const satisfies readonly { value: TransactionType; label: string }[]
+] as const satisfies readonly { value: ManualTransactionType; label: string }[]
 
 interface TransactionFormProps {
   initial: TransactionDraft
@@ -37,7 +37,7 @@ interface TransactionFormProps {
   onDelete?: () => void
 }
 
-function submitLabelFor(mode: 'create' | 'edit', type: TransactionType): string {
+function submitLabelFor(mode: 'create' | 'edit', type: ManualTransactionType): string {
   if (mode === 'edit') return 'Сохранить'
   return type === 'transfer' ? 'Перевести' : 'Добавить'
 }
@@ -78,7 +78,7 @@ export function TransactionForm({
 
   const update = (patch: Partial<TransactionDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
-  const changeType = (type: TransactionType) => {
+  const changeType = (type: ManualTransactionType) => {
     if (type === 'transfer') {
       // Счёт, который пользователь уже выбрал, становится счётом-источником
       update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })

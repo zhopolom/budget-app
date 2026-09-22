@@ -65,7 +65,7 @@ function emptyAccountData(): AccountData {
   return {
     account: null,
     balance: 0,
-    activity: { income: 0, expense: 0, transferIn: 0, transferOut: 0, count: 0 },
+    activity: { income: 0, expense: 0, transferIn: 0, transferOut: 0, adjustment: 0, count: 0 },
     views: [],
     totalCount: 0,
     currency: 'UAH',

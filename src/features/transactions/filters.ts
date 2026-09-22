@@ -1,6 +1,6 @@
 import type { Id, IsoDate, MinorUnits, TransactionType } from '../../types/entities'
 import { monthDateRange, shiftMonth, type YearMonth } from '../../utils/dates'
-import { isTransfer } from './model'
+import { isEntry, isTransfer } from './model'
 import type { TransactionView } from './views'
 
 /** Период, за который экран вообще читает операции. */
@@ -113,8 +113,8 @@ function matchesFilters(view: TransactionView, filters: TransactionFilters): boo
   }
 
   if (filters.categoryIds.length > 0) {
-    // У перевода категории нет — фильтр по категории его исключает
-    if (isTransfer(transaction) || !filters.categoryIds.includes(transaction.categoryId)) return false
+    // У перевода и корректировки категории нет — фильтр по категории их исключает
+    if (!isEntry(transaction) || !filters.categoryIds.includes(transaction.categoryId)) return false
   }
 
   if (filters.minAmount !== null && transaction.amount < filters.minAmount) return false

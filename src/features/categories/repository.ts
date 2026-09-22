@@ -85,7 +85,7 @@ export const categoriesRepository = {
         .where('categoryId')
         .equals(sourceId)
         .modify((transaction) => {
-          if (transaction.type === 'transfer') return
+          if (transaction.type !== 'expense' && transaction.type !== 'income') return
           transaction.categoryId = targetId
           transaction.updatedAt = now
         })

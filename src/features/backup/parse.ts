@@ -130,6 +130,13 @@ function parseTransaction(value: unknown): Transaction | null {
     return { ...base, type, accountId, categoryId }
   }
 
+  // Корректировки появились в 0.4: счёт и направление, без категории
+  if (type === 'adjustment') {
+    const { accountId, direction } = value
+    if (!isId(accountId) || (direction !== 'increase' && direction !== 'decrease')) return null
+    return { ...base, type: 'adjustment', accountId, direction }
+  }
+
   return null
 }
 
@@ -282,10 +289,11 @@ function countDangling(data: BackupData): number {
   const accounts = new Set(data.accounts.map((account) => account.id))
   const categories = new Set(data.categories.map((category) => category.id))
 
-  const isBroken = (item: BackupData['transactions'][number] | BackupData['recurringTransactions'][number]) =>
-    item.type === 'transfer'
-      ? !accounts.has(item.fromAccountId) || !accounts.has(item.toAccountId)
-      : !accounts.has(item.accountId) || !categories.has(item.categoryId)
+  const isBroken = (item: BackupData['transactions'][number] | BackupData['recurringTransactions'][number]) => {
+    if (item.type === 'transfer') return !accounts.has(item.fromAccountId) || !accounts.has(item.toAccountId)
+    if (item.type === 'adjustment') return !accounts.has(item.accountId)
+    return !accounts.has(item.accountId) || !categories.has(item.categoryId)
+  }
 
   return data.transactions.filter(isBroken).length + data.recurringTransactions.filter(isBroken).length
 }

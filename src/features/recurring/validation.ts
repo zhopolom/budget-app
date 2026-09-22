@@ -3,9 +3,9 @@ import type {
   Category,
   Id,
   IsoDate,
+  ManualTransactionType,
   RecurrenceFrequency,
   RecurringTransaction,
-  TransactionType,
 } from '../../types/entities'
 import type { ValidationResult } from '../../types/validation'
 import { isValidIsoDate } from '../../utils/dates'
@@ -26,7 +26,7 @@ export const MAX_INTERVAL = MAX_RECURRING_INTERVAL
  * а черновик снимается один раз при открытии шторки и о нажатии кнопки не узнает.
  */
 export interface RecurringDraft {
-  type: TransactionType
+  type: ManualTransactionType
   amountText: string
   categoryId: Id | null
   accountId: Id | null

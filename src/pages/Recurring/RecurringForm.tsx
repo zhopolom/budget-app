@@ -17,7 +17,7 @@ import {
 import { sortCategoriesByUsage } from '../../features/transactions/calculations'
 import { TRANSACTION_TYPE_LABELS } from '../../features/transactions/labels'
 import type { TransactionEditorData } from '../../features/transactions/useTransactionEditorData'
-import type { Id, RecurrenceFrequency, TransactionType } from '../../types/entities'
+import type { Id, ManualTransactionType, RecurrenceFrequency } from '../../types/entities'
 import { Money } from '../../utils/money'
 import styles from './RecurringForm.module.css'
 
@@ -25,7 +25,7 @@ const TYPE_OPTIONS = [
   { value: 'expense', label: TRANSACTION_TYPE_LABELS.expense },
   { value: 'income', label: TRANSACTION_TYPE_LABELS.income },
   { value: 'transfer', label: TRANSACTION_TYPE_LABELS.transfer },
-] as const satisfies readonly { value: TransactionType; label: string }[]
+] as const satisfies readonly { value: ManualTransactionType; label: string }[]
 
 const FREQUENCY_CHIPS = [
   { value: 'daily', label: 'День' },
@@ -68,7 +68,7 @@ export function RecurringForm({ initial, data, mode, onSubmit, onDelete }: Recur
   const errors = attempted && !result.ok ? result.errors : {}
   const update = (patch: Partial<RecurringDraft>) => setDraft((current) => ({ ...current, ...patch }))
 
-  const changeType = (type: TransactionType) => {
+  const changeType = (type: ManualTransactionType) => {
     if (type === 'transfer') {
       // Счёт, который уже выбран, становится счётом-источником
       update({ type, fromAccountId: draft.fromAccountId ?? draft.accountId })

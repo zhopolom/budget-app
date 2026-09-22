@@ -1,9 +1,7 @@
 import { memo } from 'react'
-import { transactionIcon, transactionTitle } from '../../features/transactions/labels'
-import { isTransfer } from '../../features/transactions/model'
+import { formatSignedAmount, transactionIcon, transactionTitle } from '../../features/transactions/labels'
 import type { TransactionView } from '../../features/transactions/views'
 import type { CurrencyCode, Id } from '../../types/entities'
-import { Money } from '../../utils/money'
 import styles from './TransactionItem.module.css'
 
 interface TransactionItemProps {
@@ -19,12 +17,9 @@ export const TransactionItem = memo(function TransactionItem({ view, currency, d
   const { transaction } = view
   const note = transaction.note.trim()
 
-  // У перевода знака нет: деньги не ушли и не пришли, а переложены между счетами
-  const amount = isTransfer(transaction)
-    ? Money.format(transaction.amount, currency)
-    : Money.format(transaction.type === 'expense' ? -transaction.amount : transaction.amount, currency, {
-        sign: 'always',
-      })
+  // У перевода знака нет: деньги не ушли и не пришли, а переложены между счетами.
+  // У корректировки знак по направлению сверки
+  const amount = formatSignedAmount(transaction, currency)
 
   const content = (
     <>

@@ -6,7 +6,7 @@ import { Money } from '../../utils/money'
 import styles from './AmountInput.module.css'
 
 /** У перевода нет знака: сумма не прибавляется и не вычитается, а переезжает. */
-const SIGN_GLYPHS: Record<TransactionType, string> = { expense: '−', income: '+', transfer: '→' }
+const SIGN_GLYPHS: Record<TransactionType, string> = { expense: '−', income: '+', transfer: '→', adjustment: '±' }
 
 interface AmountInputProps {
   value: string

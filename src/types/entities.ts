@@ -27,8 +27,15 @@ export interface Account {
   updatedAt: Timestamp
 }
 
-/** Перевод не относится ни к доходам, ни к расходам — у него нет категории. */
-export type TransactionType = 'expense' | 'income' | 'transfer'
+/**
+ * Перевод не относится ни к доходам, ни к расходам — у него нет категории.
+ * Корректировка — результат сверки с фактическим остатком: меняет счёт,
+ * но не является ни доходом, ни расходом и в бюджет не попадает.
+ */
+export type TransactionType = 'expense' | 'income' | 'transfer' | 'adjustment'
+
+/** То, что вводят руками в форме: корректировку создаёт только сверка остатка. */
+export type ManualTransactionType = 'expense' | 'income' | 'transfer'
 
 /** Категории бывают только у расходов и доходов. */
 export type CategoryType = 'expense' | 'income'
@@ -82,11 +89,26 @@ export interface TransferTransaction extends TransactionBase {
   toAccountId: Id
 }
 
+/** Куда сверка сдвигает остаток: в банке оказалось больше или меньше, чем в Budget. */
+export type AdjustmentDirection = 'increase' | 'decrease'
+
+/**
+ * Корректировка остатка по итогам сверки. Сумма всегда положительная,
+ * направление — отдельным полем, как и у остальных типов: знак задаёт тип.
+ * Влияет только на остаток счёта и общий капитал; в доходы, расходы,
+ * бюджет и аналитику не попадает.
+ */
+export interface AdjustmentTransaction extends TransactionBase {
+  type: 'adjustment'
+  accountId: Id
+  direction: AdjustmentDirection
+}
+
 /**
  * Размеченное объединение: TypeScript не даст прочитать categoryId у перевода
  * или fromAccountId у расхода, пока тип не сужен. Хелперы — в features/transactions/model.ts.
  */
-export type Transaction = EntryTransaction | TransferTransaction
+export type Transaction = EntryTransaction | TransferTransaction | AdjustmentTransaction
 
 /** Задел v0.1: лимиты категорий хранились внутри Budget. С v2 живут в отдельной таблице. */
 export interface LegacyCategoryLimit {

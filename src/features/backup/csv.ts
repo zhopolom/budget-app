@@ -1,4 +1,5 @@
 import type { CurrencyCode } from '../../types/entities'
+import { signedAmount } from '../transactions/calculations'
 import { TRANSACTION_TYPE_LABELS } from '../transactions/labels'
 import { isTransfer } from '../transactions/model'
 import type { TransactionView } from '../transactions/views'
@@ -49,12 +50,12 @@ function rowOf(view: TransactionView, currency: CurrencyCode): string[] {
     ]
   }
 
-  // Расход выгружается со знаком минус: так его видно в сводной таблице
-  const signed = transaction.type === 'expense' ? -transaction.amount : transaction.amount
+  // Расход выгружается со знаком минус, корректировка — по направлению:
+  // так их видно в сводной таблице
   return [
     transaction.date,
     TRANSACTION_TYPE_LABELS[transaction.type],
-    amountField(signed),
+    amountField(signedAmount(transaction)),
     currency,
     view.category?.name ?? '',
     view.account?.name ?? '',
