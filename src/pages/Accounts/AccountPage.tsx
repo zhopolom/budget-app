@@ -19,15 +19,17 @@ import { pluralRu } from '../../utils/plural'
 import { AccountForm } from './AccountForm'
 import styles from './AccountPage.module.css'
 import { DeleteAccountPanel } from './DeleteAccountPanel'
+import { ReconcileSheet } from './ReconcileSheet'
 import { useAccountData } from './useAccountData'
 
-type SheetMode = 'closed' | 'edit' | 'create' | 'delete'
+type SheetMode = 'closed' | 'edit' | 'create' | 'delete' | 'reconcile'
 
 const SHEET_TITLES: Record<SheetMode, string> = {
   closed: '',
   edit: 'Счёт',
   create: 'Новый счёт',
   delete: 'Удаление счёта',
+  reconcile: 'Сверка остатка',
 }
 
 export function AccountPage() {
@@ -69,9 +71,14 @@ export function AccountPage() {
             <p className={styles.count}>
               {data.totalCount} {pluralRu(data.totalCount, ['операция', 'операции', 'операций'])} за всё время
             </p>
-            <Button variant="secondary" onClick={() => setSheet('edit')} className={styles.edit}>
-              Изменить счёт
-            </Button>
+            <div className={styles.headerActions}>
+              <Button variant="secondary" onClick={() => setSheet('reconcile')}>
+                Сверить баланс
+              </Button>
+              <Button variant="secondary" onClick={() => setSheet('edit')}>
+                Изменить счёт
+              </Button>
+            </div>
           </section>
 
           <MonthSelector selection={selection} />
@@ -124,6 +131,16 @@ export function AccountPage() {
                   currency={data.currency}
                   // Счёт создавали ради переноса — возвращаемся к удалению
                   onSaved={() => setSheet('delete')}
+                />
+              )}
+
+              {sheet === 'reconcile' && (
+                <ReconcileSheet
+                  account={account}
+                  current={data.balance}
+                  currency={data.currency}
+                  today={today}
+                  onDone={() => setSheet('closed')}
                 />
               )}
 

@@ -1,0 +1,76 @@
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.hint {
+  font-size: 14px;
+  line-height: 1.4;
+  color: var(--ink-2);
+}
+
+.summary {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 44px;
+  padding: 10px 14px;
+}
+
+.row + .row {
+  border-top: 1px solid var(--line);
+}
+
+.row dt {
+  font-size: 15px;
+  color: var(--ink-2);
+}
+
+.row dd {
+  margin: 0;
+  font-family: var(--font-num);
+  font-size: 16px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.row[data-total] dt {
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.row[data-total] dd {
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.row dd[data-tone='positive'] {
+  color: var(--positive);
+}
+
+.row dd[data-tone='negative'] {
+  color: var(--negative);
+}
+
+.outcome {
+  padding: 0 4px;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 500;
+}
+
+.outcome[data-match] {
+  color: var(--ink-2);
+  font-weight: 400;
+}

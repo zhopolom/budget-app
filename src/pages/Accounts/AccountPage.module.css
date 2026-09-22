@@ -50,8 +50,19 @@
   color: var(--ink-2);
 }
 
-.edit {
+/* Две кнопки в ряд: с обычными отступами они не помещаются на iPhone SE и переносятся */
+.headerActions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
   margin-top: 14px;
+}
+
+.headerActions > * {
+  padding-left: 12px;
+  padding-right: 12px;
+  font-size: 15px;
 }
 
 .tiles {
